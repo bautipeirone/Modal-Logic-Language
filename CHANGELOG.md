@@ -8,5 +8,14 @@ and this project adheres to the
 
 ## Unreleased
 
+## 0.1.0.1 - 2024-01-03
+### Added
+Frame module implementing a graph data structure and graph property checking
+functions.
+
+### Changed
+- Parser has been updated to its minimal working version.
+- Model data type internal representation
+
 ## 0.1.0.0 - 2024-01-01
 Stack project structure files and initial configs.
