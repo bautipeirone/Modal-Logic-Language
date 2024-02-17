@@ -8,6 +8,15 @@ and this project adheres to the
 
 ## Unreleased
 
+## 0.1.0.2 - 2024-01-05
+### Added
+Core module with standard type definitions used by Parser.hs and Modal.hs.
+sub function in Modal.hs performs substitution of formulas.
+
+### Changed
+Parser now implements set statements and literal substitutions. Also supports
+more representations for logic operators
+
 ## 0.1.0.1 - 2024-01-03
 ### Added
 Frame module implementing a graph data structure and graph property checking

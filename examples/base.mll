@@ -26,10 +26,12 @@ set tag = {                  -- Indica
   x4 -> {p,q}
 }
 
-def phi = p <-> q  -- Formulas
-def psi = P -> Q   -- Esquemas
+def phi = p <-> q  -- Formulas y/o esquemas. Las formulas pueden ser evaluadas
+                   -- o usadas a su vez como esquemas de formulas, es decir,
+                   -- abstraer una estructura sintactica y luego ser utilizada
+                   -- mediante reemplazos a esta
 
-psi[p/P]           -- Reemplazo sintactico, equivalente a "not p"
+phi[r and s/p]     -- Reemplazo sintactico, equivalente a "r and s <-> q"
 
 r and q  -- Dos tipos de escritura de proposiciones posible
 r &&  q  -- Estilo clasico (&&, ||, !) o estilo literal (and, or, not)

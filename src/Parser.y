@@ -34,8 +34,8 @@ import Modal
   not       { TNot }
   bottom    { TBottom }
   top       { TTop }
-  sq        { TSquare }
-  dia       { TDiamond }
+  square    { TSquare }
+  diamond   { TDiamond }
   def       { TDef }
   set       { TSet }
   worlds    { TWorlds }
@@ -47,6 +47,7 @@ import Modal
 %right and
 %right or
 %nonassoc not
+%nonassoc square diamond
 
 {- Comentario sobre la asociatividad del "si y solo si":
 -- Por lo general, al escribir p <-> q <-> r nos referimos a (p <-> q) && (q <-> r).
@@ -55,7 +56,6 @@ import Modal
 -- Para evitar errores al escribir formulas, no se permitira tal tipo de
 -- expresiones, sino que deberan ser escritas en la forma conjuntiva explicitamente.
 -}
-
 
 %%
 
@@ -97,8 +97,8 @@ FExp    : FExp and FExp   { And $1 $3 }
         | not FExp        { Not $2 }
         | FExp '->'  FExp { Imply $1 $3}
         | FExp '<->' FExp { Iff $1 $3 }
-        | sq FExp         { Square $2 }
-        | dia FExp        { Diamond $2 }
+        | square FExp     { Square $2 }
+        | diamond FExp    { Diamond $2 }
         | bottom          { Bottom }
         | top             { Top }
         | var             { Atomic $1 }
@@ -165,7 +165,9 @@ modalLexer cont s n path =
     ('\n':r) -> modalLexer cont r (n+1) path
     ('-':('-':r)) -> modalLexer cont (dropWhile ((/=) '\n') r) n path
     ('{':('-':r)) -> consumirBK 0 n path cont r
-    ('-':('}':cs)) -> Left $ "Línea "++(show n)++": Comentario no abierto"
+    ('-':('}':r)) -> Left $ "Línea "++(show n)++": Comentario no abierto"
+    ('[':(']':r)) -> cont TSquare  r n path
+    ('<':('>':r)) -> cont TDiamond r n path
     ('=':r) -> cont TEq  r n path
     (',':r) -> cont TSep r n path
     ('/':r) -> cont TSlash r n path

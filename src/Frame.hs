@@ -1,5 +1,6 @@
 module Frame 
         ( Graph (..)
+        , neighbours
         , isReflexive
         , isSymmetric
         , isSerial
@@ -54,7 +55,7 @@ isSymmetric g = checkSymmetry (vertices g)
       isSymmetricPair x y = existsEdge g (x,y) == existsEdge g (y,x)
 
 isSerial :: Ord v => GraphProperty v
-isSerial g = all (not . null . neighbours g) (vertices g)
+isSerial g = (not . any (null . neighbours g)) (vertices g)
 
 isTransitive :: Ord v => GraphProperty v
 isTransitive g = all vertexIsTransitive (vertices g)

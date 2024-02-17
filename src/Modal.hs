@@ -53,46 +53,44 @@ instance Applicative Formula where
 
 instance Monad Formula where
   return = pure
-  Bottom >>= g = Bottom
-  Top    >>= g = Top
-  (Atomic p) >>= g = g p
-  (Not f) >>= g = Not (f >>= g)
-  (And f1 f2) >>= g = And (f1 >>= g) (f2 >>= g)
-  (Or f1 f2) >>= g = Or (f1 >>= g) (f2 >>= g)
-  (Square f) >>= g = Square (f >>= g)
+  Bottom        >>= _ = Bottom
+  Top           >>= _ = Top
+  (Atomic p)    >>= g = g p
+  (Not f)       >>= g = Not (f >>= g)
+  (And f1 f2)   >>= g = And (f1 >>= g) (f2 >>= g)
+  (Or f1 f2)    >>= g = Or (f1 >>= g) (f2 >>= g)
   (Imply f1 f2) >>= g = Imply (f1 >>= g) (f2 >>= g)
-  (Iff f1 f2) >>= g = Iff (f1 >>= g) (f2 >>= g)
-  -- (Diamond f) >>= g = Diamond (f >>= g)
+  (Iff f1 f2)   >>= g = Iff (f1 >>= g) (f2 >>= g)
+  (Square f)    >>= g = Square (f >>= g)
+  (Diamond f)   >>= g = Diamond (f >>= g)
 
 sub :: Eq a => Formula a -> Formula a -> a -> Formula a
 sub phi p x  = do y <- phi
                   if y == x then p
                   else return y
 
-{-
-validAtoms :: Model World a -> World -> [a]
+validAtoms :: Model World a -> World -> S.Set a
 validAtoms m w = fromMaybe S.empty (M.lookup w l)
           where l = tag m
 
 nextStates :: Model World a -> World -> [World]
-nextStates m w = fromMaybe [] (M.lookup w r)
-          where r = transitions m
+nextStates m = neighbours (frame m)
 
--- Notar que se puede omitir la semantica del operador Diamond
 (||-) :: Eq a => Model World a -> Formula a -> World -> Bool
-(||-) _ Bottom      x = False
-(||-) m (Atomic p)  x = elem p $ validAtoms m x
-(||-) m (Not f)     x = not $ (||-) m f x
-(||-) m (And f1 f2) x = ((||-) m f1 x) && ((||-) m f2 x)
-(||-) m (Or f1 f2)  x = ((||-) m f1 x) || ((||-) m f2 x)
-(||-) m (Iff f1 f2) x = ((||-) m f1 x) == ((||-) m f2 x)
-(||-) m (Square f)  x = all ((||-) m f) (nextStates m x)
--- (||-) m (Diamond f) x = any ((||-) m f) (nextStates m x)
+(||-) _ Bottom        w = False
+(||-) _ Top           w = True
+(||-) m (Atomic p)    w = elem p $ validAtoms m w
+(||-) m (Not f)       w = not $ (||-) m f w
+(||-) m (And f1 f2)   w = ((||-) m f1 w) && ((||-) m f2 w)
+(||-) m (Or f1 f2)    w = ((||-) m f1 w) || ((||-) m f2 w)
+(||-) m (Imply f1 f2) w = ((||-) m f1 w) <= ((||-) m f2 w)
+(||-) m (Iff f1 f2)   w = ((||-) m f1 w) == ((||-) m f2 w)
+(||-) m (Square f)    w = all ((||-) m f) (nextStates m w)
+(||-) m (Diamond f)   w = any ((||-) m f) (nextStates m w)
 
-satisfiableInModel :: Eq a => Model a -> Formula a -> Bool
+satisfiableInModel :: Eq a => Model World a -> Formula a -> Bool
 satisfiableInModel m f = any ((||-) m f) w
-                    where w = states m
+                    where w = worlds m
 
-validInModel :: Eq a => Model a -> Formula a -> Bool
+validInModel :: Eq a => Model World a -> Formula a -> Bool
 validInModel m f = not $ satisfiableInModel m $ Not f
--}

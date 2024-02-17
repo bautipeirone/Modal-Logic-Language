@@ -31,6 +31,7 @@ library
       Frame
       Modal
       Parser
+      PrettyPrinter
   other-modules:
       Paths_MLL
   autogen-modules:
@@ -41,10 +42,11 @@ library
       PatternSynonyms
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      array
+      ansi-wl-pprint
+    , array
     , base >=4.7 && <5
     , containers
-    , vector
+    , pretty
   default-language: Haskell2010
 
 executable MLL-exe
@@ -62,10 +64,11 @@ executable MLL-exe
       happy
   build-depends:
       MLL
+    , ansi-wl-pprint
     , array
     , base >=4.7 && <5
     , containers
-    , vector
+    , pretty
   default-language: Haskell2010
 
 test-suite MLL-test
@@ -82,8 +85,9 @@ test-suite MLL-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       MLL
+    , ansi-wl-pprint
     , array
     , base >=4.7 && <5
     , containers
-    , vector
+    , pretty
   default-language: Haskell2010
