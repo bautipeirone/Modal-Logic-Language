@@ -25,6 +25,7 @@ dependencies:
 - array
 - pretty
 - ansi-wl-pprint
+- mtl
 
 
 default-extensions:

@@ -1,6 +1,7 @@
 {
 module Parser where
 
+import Core (Result)
 import Data.Char
 import Core
 import Modal
@@ -28,7 +29,9 @@ import Modal
   '/'       { TSlash }
   '->'      { TImply }
   '<->'     { TIff }
-  var       { TVar $$ }
+  '||-'     { TSequent }
+  ident     { TIdent $$ }
+  keyword   { TKeyword $$ }
   and       { TAnd }
   or        { TOr }
   not       { TNot }
@@ -38,9 +41,10 @@ import Modal
   diamond   { TDiamond }
   def       { TDef }
   set       { TSet }
-  worlds    { TWorlds }
-  trans     { TTrans }
+  frame     { TFrame }
   tag       { TTag }
+  isValid   { TIsValid }
+  isSatis   { TIsSatis }
 
 %nonassoc '<->'
 %right '->'
@@ -68,10 +72,10 @@ collection(p, sep)  : collection(p, sep) sep p     { $3 : $1 }
                     |                              { [] }
 
 Set :: { [String] }  -- Conjunto matematico por extension, no el token set
-Set : '{' collection(var, ',') '}' { $2 }
+Set : '{' collection(keyword, ',') '}' { $2 }
 
 ElementMapping  :: { (String, [String]) }
-ElementMapping  : var '->' Set     { ($1, $3) }
+ElementMapping  : keyword '->' Set     { ($1, $3) }
 
 Map :: { [(String, [String])] }
 Map : '{' collection(ElementMapping, ',') '}' { $2 }
@@ -82,14 +86,18 @@ File    : Stmt File { $1 : $2 }
         |           { [] }
 
 Stmt    :: { Stmt String String }
-Stmt    : def var '=' FExp { Def $2 $4 }
-        | SetStmt          { Set $1 }
-        | FExp             { Expr $1 }
+Stmt    : def ident '=' FExp { Def $2 $4 }
+        | SetStmt            { Set $1 }
+        | Exp                { Expr $1 }
 
 SetStmt :: { SetStmt String String }
-SetStmt : set worlds '=' Set { Worlds $4}
-        | set trans  '=' Map { Transition $4 }
-        | set tag    '=' Map { Tag $4 }
+SetStmt : set frame  '=' Map { Frame (buildFrame $4) }
+        | set tag    '=' Map { Tag   (buildTag   $4) }
+
+Exp :: { Op String String }
+Exp : isValid FExp   { Valid $2 }
+    | isSatis FExp   { Satis $2 }
+    | keyword '||-' FExp { Sequent $1 $3 }
 
 FExp    :: { Formula String }
 FExp    : FExp and FExp   { And $1 $3 }
@@ -101,12 +109,17 @@ FExp    : FExp and FExp   { And $1 $3 }
         | diamond FExp    { Diamond $2 }
         | bottom          { Bottom }
         | top             { Top }
-        | var             { Atomic $1 }
-        | FExp '[' FExp '/' var ']' { sub $1 $3 $5 }
+        | keyword         { Atomic $1 }
+        | ident           { Global $1 }
+        -- Para poder hacer substituciones que tengan en cuenta
+        -- el ambiente no va a ser posible realizar substituciones en tiempo
+        -- de parsing. Lo voy a postergar a momento de evaluacion.
+        | FExp '[' FExp '/' keyword ']' { Sub $1 $3 $5 }
         | '(' FExp ')'    { $2 }
 
 {
-data Token  = TVar String
+data Token  = TKeyword String -- Built in function or atomic proposition identifier
+            | TIdent   String -- Global definition identifier (used for schemes)
             | TDef
             | TEq
             | TUse
@@ -121,9 +134,12 @@ data Token  = TVar String
             | TTop
             | TSquare
             | TDiamond
+            -- Operadores / BIF
+            | TIsValid
+            | TIsSatis
+            | TSequent
             -- Modelo
-            | TWorlds
-            | TTrans
+            | TFrame
             | TTag
             -- Sintaxis Concreta
             | TSep
@@ -137,7 +153,6 @@ data Token  = TVar String
             | TEOF
             deriving Show
 
-type Result a = Either String a
 type LineNumber = Int
 type Filename = String
 
@@ -168,6 +183,7 @@ modalLexer cont s n path =
     ('-':('}':r)) -> Left $ "Línea "++(show n)++": Comentario no abierto"
     ('[':(']':r)) -> cont TSquare  r n path
     ('<':('>':r)) -> cont TDiamond r n path
+    ('|':('|':('-':r))) -> cont TSequent r n path
     ('=':r) -> cont TEq  r n path
     (',':r) -> cont TSep r n path
     ('/':r) -> cont TSlash r n path
@@ -182,7 +198,7 @@ modalLexer cont s n path =
     ('|':('|':r)) -> cont TOr    r n path
     ('-':('>':r)) -> cont TImply r n path
     ('<':('-':('>':r))) -> cont TIff r n path
-    (c:r) | isAlpha c -> lexIdent (c:r)
+    (c:r) | isAlpha c -> if isUpper c then lexIdent (c:r) else lexKeyword (c:r)
           | isSpace c -> modalLexer cont r n path
     other -> Left $ formatError n path ("Error de lexer: " ++ other)
   where
@@ -194,20 +210,23 @@ modalLexer cont s n path =
                             0 -> modalLexer cont cs cl path
                             _ -> consumirBK (anidado-1) cl path cont cs
         ('\n':cs) -> consumirBK anidado (cl+1) path cont cs
-        (_:cs) -> consumirBK anidado cl path cont cs                  
-    lexIdent ident = case span isAlpha ident of
-                        --("use"  , r) -> cont TUse    r n path
-                        ("set"  , r) -> cont TSet    r n path
-                        ("def"  , r) -> cont TDef    r n path
-                        ("and"  , r) -> cont TAnd    r n path
-                        ("or"   , r) -> cont TOr     r n path
-                        ("not"  , r) -> cont TNot    r n path
-                        ("F"    , r) -> cont TBottom r n path
-                        ("T"    , r) -> cont TTop    r n path
-                        ("sq"   , r) -> cont TSquare r n path
-                        ("dia"  , r) -> cont TDiamond r n path
-                        ("worlds",r) -> cont TWorlds r n path
-                        ("transition", r) -> cont TTrans  r n path
-                        ("tag"  , r) -> cont TTag    r n path
-                        (var    , r) -> cont (TVar var) r n path
+        (_:cs) -> consumirBK anidado cl path cont cs
+    lexIdent cs = let (ident, r) = span isAlphaNum cs in cont (TIdent ident) r n path
+    -- Los identificadores comienzan por un caracter alfabetico pero pueden luego contener caracteres numericos
+    lexKeyword cs = case span isAlphaNum cs of
+                      --("use"  , r) -> cont TUse    r n path
+                      ("set"  , r) -> cont TSet       r n path
+                      ("def"  , r) -> cont TDef       r n path
+                      ("and"  , r) -> cont TAnd       r n path
+                      ("or"   , r) -> cont TOr        r n path
+                      ("not"  , r) -> cont TNot       r n path
+                      ("F"    , r) -> cont TBottom    r n path
+                      ("T"    , r) -> cont TTop       r n path
+                      ("sq"   , r) -> cont TSquare    r n path
+                      ("dia"  , r) -> cont TDiamond   r n path
+                      ("frame", r) -> cont TFrame     r n path
+                      ("tag"  , r) -> cont TTag       r n path
+                      ("isValid", r) -> cont TIsValid r n path
+                      ("isSatis", r) -> cont TIsSatis r n path
+                      (kw     , r) -> cont (TKeyword kw) r n path
 }

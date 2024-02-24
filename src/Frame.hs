@@ -1,5 +1,6 @@
 module Frame 
-        ( Graph (..)
+        ( Graph (vertices, edges)
+        , graphFromEdges
         , neighbours
         , isReflexive
         , isSymmetric
@@ -12,6 +13,7 @@ module Frame
 
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
+import Data.List (nub)
 
 {-
 -- Internal representation of a graph
@@ -22,6 +24,16 @@ data Graph v = Graph
       { vertices :: [v]
       , edges    :: M.Map v [v]
       } deriving Show
+
+-- Crea un grafo dada una lista de tipo (x, [y1, .., yn]) donde en el grafo
+-- existe una arisa orientada x -> y1, .., x -> yn.
+graphFromEdges :: Ord w => [(w, [w])] -> Graph w
+graphFromEdges es = Graph { vertices = v, edges = e }
+        where
+          -- De esta forma se consideran tambien vertices que solo tienen
+          -- aristas entrantes.
+          v = nub $ concatMap (uncurry (:)) es
+          e = fmap nub (M.fromListWith (++) es)
 
 -- Properties over graphs are thought as predicates
 -- over these types. If the predicate is valid on a
@@ -82,5 +94,4 @@ isLinear g = all vertexIsLinear (vertices g)
               c = cartesian n n
           in all (\(y,z) -> y == z || existsEdge g (y,z) || existsEdge g (z,y)) c
 
--- newtype Frame v = Frame (Graph v)
 -- type Logic v = [GraphProperty v]
