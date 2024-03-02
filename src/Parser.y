@@ -1,9 +1,14 @@
 {
 module Parser where
 
-import Core (Result)
+import Control.Monad
+import Control.Monad.Trans.State
+import Control.Monad.Error.Class (throwError)
+
 import Data.Char
+import Data.Maybe
 import Core
+import Common
 import Modal
 }
 
@@ -86,35 +91,34 @@ File    : Stmt File { $1 : $2 }
         |           { [] }
 
 Stmt    :: { Stmt String String }
-Stmt    : def ident '=' FExp { Def $2 $4 }
-        | SetStmt            { Set $1 }
-        | Exp                { Expr $1 }
+Stmt    :  Exp { Expr $1 }
+-- Stmt    : def ident '=' FExp { Def $2 $4 }
+        -- | SetStmt            { Set $1 }
+        -- | Exp                { Expr $1 }
 
 SetStmt :: { SetStmt String String }
 SetStmt : set frame  '=' Map { Frame (buildFrame $4) }
         | set tag    '=' Map { Tag   (buildTag   $4) }
 
 Exp :: { Op String String }
-Exp : isValid FExp   { Valid $2 }
-    | isSatis FExp   { Satis $2 }
-    | keyword '||-' FExp { Sequent $1 $3 }
+Exp : { Sequent "x" Bottom }
+-- Exp : isValid FExp       { Valid $2 }
+--     | isSatis FExp       { Satis $2 }
+--     | keyword '||-' FExp { Sequent $1 $3 }
 
-FExp    :: { Formula String }
-FExp    : FExp and FExp   { And $1 $3 }
-        | FExp or  FExp   { Or  $1 $3 }
-        | not FExp        { Not $2 }
-        | FExp '->'  FExp { Imply $1 $3}
-        | FExp '<->' FExp { Iff $1 $3 }
-        | square FExp     { Square $2 }
-        | diamond FExp    { Diamond $2 }
-        | bottom          { Bottom }
-        | top             { Top }
-        | keyword         { Atomic $1 }
-        | ident           { Global $1 }
-        -- Para poder hacer substituciones que tengan en cuenta
-        -- el ambiente no va a ser posible realizar substituciones en tiempo
-        -- de parsing. Lo voy a postergar a momento de evaluacion.
-        | FExp '[' FExp '/' keyword ']' { Sub $1 $3 $5 }
+FExp    :: { Scheme String }
+FExp    : FExp and FExp   { liftM2 LAnd $1 $3 }
+        | FExp or  FExp   { liftM2 LOr  $1 $3 }
+        | FExp '->'  FExp { liftM2 LImply $1 $3}
+        | FExp '<->' FExp { liftM2 LIff $1 $3 }
+        | not FExp        { liftM  LNot $2 }
+        | square FExp     { liftM  LSquare $2 }
+        | diamond FExp    { liftM  LDiamond $2 }
+        | bottom          { return LBottom }
+        | top             { return LTop }
+        | keyword         { return (LAtomic $1) }
+        | ident           { get >>= maybe (undefError $1) liftFormula . lookup $1 }
+        | FExp '[' FExp '/' keyword ']' { liftM2 (\x y -> LSub x y $5) $1 $3 }
         | '(' FExp ')'    { $2 }
 
 {
@@ -211,7 +215,10 @@ modalLexer cont s n path =
                             _ -> consumirBK (anidado-1) cl path cont cs
         ('\n':cs) -> consumirBK anidado (cl+1) path cont cs
         (_:cs) -> consumirBK anidado cl path cont cs
-    lexIdent cs = let (ident, r) = span isAlphaNum cs in cont (TIdent ident) r n path
+    lexIdent cs = case span isAlphaNum cs of
+                    ("T",   r) -> cont TTop r n path
+                    ("F",   r) -> cont TBottom r n path
+                    (ident, r) -> cont (TIdent ident) r n path
     -- Los identificadores comienzan por un caracter alfabetico pero pueden luego contener caracteres numericos
     lexKeyword cs = case span isAlphaNum cs of
                       --("use"  , r) -> cont TUse    r n path
@@ -220,8 +227,6 @@ modalLexer cont s n path =
                       ("and"  , r) -> cont TAnd       r n path
                       ("or"   , r) -> cont TOr        r n path
                       ("not"  , r) -> cont TNot       r n path
-                      ("F"    , r) -> cont TBottom    r n path
-                      ("T"    , r) -> cont TTop       r n path
                       ("sq"   , r) -> cont TSquare    r n path
                       ("dia"  , r) -> cont TDiamond   r n path
                       ("frame", r) -> cont TFrame     r n path

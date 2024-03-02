@@ -1,15 +1,15 @@
 module Frame 
-        ( Graph (vertices, edges)
-        , graphFromEdges
-        , neighbours
-        , isReflexive
-        , isSymmetric
-        , isSerial
-        , isFunctional
-        , isLinear
-        , isTransitive
-        , isEuclidean
-        ) where
+  ( Graph (vertices, edges)
+  , graphFromEdges
+  , neighbours
+  , isReflexive
+  , isSymmetric
+  , isSerial
+  , isFunctional
+  , isLinear
+  , isTransitive
+  , isEuclidean
+  ) where
 
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)

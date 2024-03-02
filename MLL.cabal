@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      Common
       Core
       Frame
       Modal
@@ -48,6 +49,7 @@ library
     , containers
     , mtl
     , pretty
+    , transformers
   default-language: Haskell2010
 
 executable MLL-exe
@@ -71,6 +73,7 @@ executable MLL-exe
     , containers
     , mtl
     , pretty
+    , transformers
   default-language: Haskell2010
 
 test-suite MLL-test
@@ -93,4 +96,5 @@ test-suite MLL-test
     , containers
     , mtl
     , pretty
+    , transformers
   default-language: Haskell2010

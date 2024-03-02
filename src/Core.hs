@@ -8,8 +8,9 @@ module Core ( Stmt (..)
 import Modal
 
 -- import PrettyPrinter
+import Common
+import Frame
 import Control.Monad.State.Lazy
-import Control.Monad.Reader
 import Control.Monad.Except
 -- import Data.Bifunctor
 
@@ -17,12 +18,10 @@ type Result a = Either String a
 
 data SetStmt w a  = Frame (Graph w)
                   | Tag (TagMapping w a)
-                  deriving Show
 
 data Stmt w a = Def String (Formula a)
               | Expr (Op w a)
               | Set (SetStmt w a)
-            deriving Show
 
 data Op w a = Valid (Formula a)
             | Satis (Formula a)

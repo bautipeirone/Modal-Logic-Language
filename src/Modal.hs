@@ -1,11 +1,9 @@
 -- Modulo con definiciones estandar para evaluacion de logica modal
 module Modal
-  ( Formula (..)
-  , Model (..)
+  ( Model (..)
   , TagMapping
-  , Graph
   , Env
-  , DefTable
+  , toFormula
   , buildFrame
   , buildTag
   , (||-)
@@ -13,7 +11,8 @@ module Modal
   , satisfiableInModel
 ) where
 
-import Control.Monad (ap, liftM, liftM2)
+import Common
+import Control.Monad (liftM, liftM2)
 import Control.Monad.Reader
 import Control.Monad.Except
 
@@ -26,15 +25,40 @@ import Frame
 type World = String
 type TagMapping w a = M.Map w (S.Set a)
 
-type DefTable a = [(a, Formula a)]
 type Env a = (Model World a, DefTable a)
-
-data Exception = UndefVar | UnderWorld deriving (Show, Eq)
 
 data Model w a = Model
       { frame :: Graph w
       , tag   :: TagMapping w a
-      } deriving Show
+      }
+
+toFormula :: Eq a => LitFormula a -> Formula a
+toFormula = toFormula' . sub []
+  where
+    toFormula' :: LitFormula a -> Formula a
+    toFormula' LBottom        = Bottom
+    toFormula' LTop           = Top
+    toFormula' (LAtomic x)    = Atomic x
+    toFormula' (LAnd f1 f2)   = And (toFormula' f1) (toFormula' f2)
+    toFormula' (LOr f1 f2)    = Or (toFormula' f1) (toFormula' f2)
+    toFormula' (LImply f1 f2) = Imply (toFormula' f1) (toFormula' f2)
+    toFormula' (LIff f1 f2)   = Iff (toFormula' f1) (toFormula' f2)
+    toFormula' (LNot f)       = Not (toFormula' f)
+    toFormula' (LSquare f)    = Square (toFormula' f)
+    toFormula' (LDiamond f)   = Diamond (toFormula' f)
+
+    sub :: Eq a => [(a, LitFormula a)] -> LitFormula a -> LitFormula a
+    sub _ LBottom = LBottom
+    sub _ LTop    = LTop
+    sub env p@(LAtomic y)  = fromMaybe p (lookup y env)
+    sub env (LAnd p1 p2)   = LAnd (sub env p1) (sub env p2)
+    sub env (LOr  p1 p2)   = LOr (sub env p1) (sub env p2)
+    sub env (LImply p1 p2) = LImply (sub env p1) (sub env p2)
+    sub env (LIff p1 p2)   = LIff (sub env p1) (sub env p2)
+    sub env (LNot p)       = LNot (sub env p)
+    sub env (LSquare p)    = LSquare (sub env p)
+    sub env (LDiamond p)   = LDiamond (sub env p)
+    sub env (LSub q r y)   = let r' = sub env r in sub ((y,r'):env) q
 
 worlds :: Model w a -> [w]
 worlds = vertices . frame
@@ -47,38 +71,6 @@ buildFrame = graphFromEdges
 
 buildTag :: (Ord w, Ord a) => [(w, [a])] -> TagMapping w a
 buildTag = fmap S.fromList . M.fromListWith (++)
-
-data Formula a  = Bottom
-                | Top
-                | Sub (Formula a) (Formula a) a
-                | Atomic  a
-                | Global  a
-                | Not     (Formula a)
-                | And     (Formula a) (Formula a)
-                | Or      (Formula a) (Formula a)
-                | Imply   (Formula a) (Formula a)
-                | Iff     (Formula a) (Formula a)
-                | Square  (Formula a)
-                | Diamond (Formula a)
-                deriving Show
-
-instance Functor Formula where
-  fmap g Bottom        = Bottom
-  fmap g Top           = Top
-  fmap g (Atomic p)    = Atomic (g p)
-  fmap g (Global v)    = Global (g v)
-  fmap g (Not f)       = Not (fmap g f)
-  fmap g (And   f1 f2) = And (fmap g f1) (fmap g f2)
-  fmap g (Or    f1 f2) = Or  (fmap g f1) (fmap g f2)
-  fmap g (Imply f1 f2) = Imply (fmap g f1) (fmap g f2)
-  fmap g (Iff   f1 f2) = Iff (fmap g f1) (fmap g f2)
-  fmap g (Square  f)   = Square (fmap g f)
-  fmap g (Diamond f)   = Diamond (fmap g f)
-
--- sub :: Eq a => Formula a -> Formula a -> a -> Formula a
--- sub phi p x  = do y <- phi
---                   if y == x then p
---                   else return y
 
 validAtoms :: Model World a -> World -> S.Set a
 validAtoms m w = fromMaybe S.empty (M.lookup w l)
@@ -93,24 +85,13 @@ model = asks fst
 defs :: ReaderT (Env a) (Except String) (DefTable a)
 defs = asks snd
 
--- (||-) :: Eq a => Model World a -> Formula a -> World -> Bool
--- (||-) _ Bottom        _ = False
--- (||-) _ Top           _ = True
--- (||-) m (Atomic p)    w = elem p $ validAtoms m w
--- (||-) m (Not f)       w = not $ (||-) m f w
--- (||-) m (And f1 f2)   w = (||-) m f1 w && (||-) m f2 w
--- (||-) m (Or f1 f2)    w = (||-) m f1 w || (||-) m f2 w
--- (||-) m (Imply f1 f2) w = (||-) m f1 w <= (||-) m f2 w
--- (||-) m (Iff f1 f2)   w = (||-) m f1 w == (||-) m f2 w
--- (||-) m (Square f)    w = all ((||-) m f) (nextStates m w)
--- (||-) m (Diamond f)   w = any ((||-) m f) (nextStates m w)
 (||-) :: Eq a => World -> Formula a -> ReaderT (Env a) (Except String) Bool
 _ ||- Bottom         = return False
 _ ||- Top            = return True
 w ||- (Atomic p)     = do m <- model
                           return $ elem p (validAtoms m w)
-w ||- (Global v)     = do ds <- defs
-                          maybe (throwError "Variable no definida") (w ||-) (lookup v ds)
+-- w ||- (Global v)     = do ds <- defs
+                          -- maybe (throwError "Variable no definida") (w ||-) (lookup v ds)
 w ||- (Not f)        = liftM not (w ||- f)
 w ||- (And f1 f2)    = liftM2 (&&) (w ||- f1) (w ||- f2)
 w ||- (Or  f1 f2)    = liftM2 (||) (w ||- f1) (w ||- f2)

@@ -1,7 +1,7 @@
 module PrettyPrinter () where
 
 -- import Core
-import Modal
+import Common
 import Prelude hiding ((<>))
 import Text.PrettyPrint.HughesPJ
 
