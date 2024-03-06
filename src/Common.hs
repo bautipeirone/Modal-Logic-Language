@@ -1,19 +1,31 @@
+{-# LANGUAGE DeriveFoldable, DeriveFunctor #-}
+
 module Common
   ( DefTable
   , Scheme
+  , Lookup
   , LitFormula (..)
   , Formula (..)
-  , undefError
+  , Result
+  , atoms
+  , undefVarError
   , liftFormula
 ) where
 
 import Control.Monad
-import Control.Monad.Trans.State
+import Control.Monad.Trans.Reader
 import Control.Monad.Error.Class (throwError)
+import Data.List (singleton, nub)
+
+type Result a = Either String a
 
 type DefTable a = [(a, Formula a)]
-type Scheme a = StateT (DefTable a) (Either String) (LitFormula a)
 
+type Lookup m a = ReaderT (DefTable a) (Either String) (m a)
+type Scheme a = Lookup LitFormula a
+
+-- Only intended as an intermediate result of the parser. It is not used
+-- for evaluation.
 data LitFormula a = LBottom
                   | LTop
                   | LAtomic a
@@ -37,23 +49,26 @@ data Formula a  = Bottom
                 | Not     (Formula a)
                 | Square  (Formula a)
                 | Diamond (Formula a)
-                deriving Show
+                deriving (Show, Foldable, Functor)
 
-instance Functor Formula where
-  fmap g Bottom        = Bottom
-  fmap g Top           = Top
-  fmap g (Atomic p)    = Atomic (g p)
-  -- fmap g (Global v)    = Global (g v)
-  fmap g (Not f)       = Not (fmap g f)
-  fmap g (And   f1 f2) = And (fmap g f1) (fmap g f2)
-  fmap g (Or    f1 f2) = Or  (fmap g f1) (fmap g f2)
-  fmap g (Imply f1 f2) = Imply (fmap g f1) (fmap g f2)
-  fmap g (Iff   f1 f2) = Iff (fmap g f1) (fmap g f2)
-  fmap g (Square  f)   = Square (fmap g f)
-  fmap g (Diamond f)   = Diamond (fmap g f)
+-- instance Functor Formula where
+--   fmap g Bottom        = Bottom
+--   fmap g Top           = Top
+--   fmap g (Atomic p)    = Atomic (g p)
+--   -- fmap g (Global v)    = Global (g v)
+--   fmap g (Not f)       = Not (fmap g f)
+--   fmap g (And   f1 f2) = And (fmap g f1) (fmap g f2)
+--   fmap g (Or    f1 f2) = Or  (fmap g f1) (fmap g f2)
+--   fmap g (Imply f1 f2) = Imply (fmap g f1) (fmap g f2)
+--   fmap g (Iff   f1 f2) = Iff (fmap g f1) (fmap g f2)
+--   fmap g (Square  f)   = Square (fmap g f)
+--   fmap g (Diamond f)   = Diamond (fmap g f)
 
-undefError :: Show a => a -> Scheme a
-undefError s = throwError $ "Undefined identifier " ++ show s
+undefVarError :: Show a => a -> Scheme a
+undefVarError s = throwError $ "Undefined identifier " ++ show s
+
+atoms :: Eq a => Formula a -> [a]
+atoms = nub . foldMap singleton
 
 liftFormula :: Eq a => Formula a -> Scheme a
 liftFormula Bottom        = return LBottom

@@ -23,8 +23,9 @@ dependencies:
 - base >= 4.7 && < 5
 - containers
 - array
-- pretty
-- ansi-wl-pprint
+# - pretty                              # HughesPJ
+# - prettyprinter-compat-ansi-wl-pprint # ANSI.Leijen
+- prettyprinter >= 1.7.1
 - transformers
 - mtl
 

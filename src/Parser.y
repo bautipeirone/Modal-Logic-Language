@@ -2,7 +2,7 @@
 module Parser where
 
 import Control.Monad
-import Control.Monad.Trans.State
+import Control.Monad.Trans.Reader
 import Control.Monad.Error.Class (throwError)
 
 import Data.Char
@@ -86,40 +86,38 @@ Map :: { [(String, [String])] }
 Map : '{' collection(ElementMapping, ',') '}' { $2 }
 
 -- ######## GRAMMAR PARSERS ########
-File    :: { [Stmt String String] }
+File    :: { [Lookup (Stmt String) String] }
 File    : Stmt File { $1 : $2 }
         |           { [] }
 
-Stmt    :: { Stmt String String }
-Stmt    :  Exp { Expr $1 }
--- Stmt    : def ident '=' FExp { Def $2 $4 }
-        -- | SetStmt            { Set $1 }
-        -- | Exp                { Expr $1 }
+Stmt  :: { Lookup (Stmt String) String }
+Stmt  : def ident '=' FExp { liftM ((Def $2) . toFormula) $4 }
+      | Exp                { liftM Expr $1 }
+      | SetStmt            { return $ Set $1 }
 
 SetStmt :: { SetStmt String String }
 SetStmt : set frame  '=' Map { Frame (buildFrame $4) }
         | set tag    '=' Map { Tag   (buildTag   $4) }
 
-Exp :: { Op String String }
-Exp : { Sequent "x" Bottom }
--- Exp : isValid FExp       { Valid $2 }
---     | isSatis FExp       { Satis $2 }
---     | keyword '||-' FExp { Sequent $1 $3 }
+Exp :: { Lookup (Op String) String }
+Exp : isValid FExp       { liftM (Valid . toFormula) $2 }
+    | isSatis FExp       { liftM (Satis . toFormula) $2 }
+    | keyword '||-' FExp { liftM ((Sequent $1) . toFormula) $3 }
 
-FExp    :: { Scheme String }
-FExp    : FExp and FExp   { liftM2 LAnd $1 $3 }
-        | FExp or  FExp   { liftM2 LOr  $1 $3 }
-        | FExp '->'  FExp { liftM2 LImply $1 $3}
-        | FExp '<->' FExp { liftM2 LIff $1 $3 }
-        | not FExp        { liftM  LNot $2 }
-        | square FExp     { liftM  LSquare $2 }
-        | diamond FExp    { liftM  LDiamond $2 }
-        | bottom          { return LBottom }
-        | top             { return LTop }
-        | keyword         { return (LAtomic $1) }
-        | ident           { get >>= maybe (undefError $1) liftFormula . lookup $1 }
-        | FExp '[' FExp '/' keyword ']' { liftM2 (\x y -> LSub x y $5) $1 $3 }
-        | '(' FExp ')'    { $2 }
+FExp  :: { Scheme String }
+FExp  : FExp and FExp   { liftM2 LAnd $1 $3 }
+      | FExp or  FExp   { liftM2 LOr  $1 $3 }
+      | FExp '->'  FExp { liftM2 LImply $1 $3}
+      | FExp '<->' FExp { liftM2 LIff $1 $3 }
+      | not FExp        { liftM  LNot $2 }
+      | square FExp     { liftM  LSquare $2 }
+      | diamond FExp    { liftM  LDiamond $2 }
+      | bottom          { return LBottom }
+      | top             { return LTop }
+      | keyword         { return (LAtomic $1) }
+      | ident           { ask >>= maybe (undefVarError $1) liftFormula . lookup $1 }
+      | FExp '[' FExp '/' keyword ']' { liftM2 (\x y -> LSub x y $5) $1 $3 }
+      | '(' FExp ')'    { $2 }
 
 {
 data Token  = TKeyword String -- Built in function or atomic proposition identifier

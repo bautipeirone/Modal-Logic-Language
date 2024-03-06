@@ -25,6 +25,10 @@ data Graph v = Graph
       , edges    :: M.Map v [v]
       } deriving Show
 
+{-
+TODO implementar instancia de Show para Graph
+-}
+
 -- Crea un grafo dada una lista de tipo (x, [y1, .., yn]) donde en el grafo
 -- existe una arisa orientada x -> y1, .., x -> yn.
 graphFromEdges :: Ord w => [(w, [w])] -> Graph w

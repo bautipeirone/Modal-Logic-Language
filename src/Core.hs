@@ -1,23 +1,22 @@
-module Core ( Stmt (..)
-            , SetStmt (..)
-            , Result
-            , updateDef
-            , Op (..)
-            ) where
+module Core
+  ( Stmt (..)
+  , SetStmt (..)
+  , Op (..)
+  , runCmd
+  ) where
 
 import Modal
 
 -- import PrettyPrinter
 import Common
 import Frame
-import Control.Monad.State.Lazy
-import Control.Monad.Except
--- import Data.Bifunctor
-
-type Result a = Either String a
+import Control.Monad.Trans.State
+import Control.Monad.Trans.Reader
+import Control.Monad.Error.Class
 
 data SetStmt w a  = Frame (Graph w)
                   | Tag (TagMapping w a)
+                  deriving Show
 
 data Stmt w a = Def String (Formula a)
               | Expr (Op w a)
@@ -26,9 +25,20 @@ data Stmt w a = Def String (Formula a)
 data Op w a = Valid (Formula a)
             | Satis (Formula a)
             | Sequent w (Formula a)
-            deriving Show
 
-type M a = StateT (Env String) (Except String) a
+{------- Show Instances -------}
+instance (Show w, Show a) => Show (Stmt w a) where
+  show (Def s f)  = "def "  ++ show s ++ " = " ++ show f
+  show (Expr op)  = "eval " ++ show op
+  show (Set stmt) = "set "  ++ show stmt
+
+instance (Show w, Show a) => Show (Op w a) where
+  show (Valid f) = "isValid " ++ show f
+  show (Satis f) = "isSatisfiable " ++ show f
+  show (Sequent w f) = show w ++ " ||- " ++ show f
+{------------------------------}
+
+type M a = StateT (Env String) (Either String) a
 
 updateDef :: Eq a => DefTable a -> a -> Formula a -> DefTable a
 updateDef [] var f = [(var, f)]
@@ -36,8 +46,8 @@ updateDef (def@(var',_):defs) var f | var == var' = (var, f) : defs
                                     | otherwise   = def : updateDef defs var f
 
 updateModel :: Model w a -> SetStmt w a -> Model w a
-updateModel model (Frame frame') = Model { frame = frame'     , tag = tag model}
-updateModel model (Tag   tag'  ) = Model { frame = frame model, tag = tag'     }
+updateModel model (Frame frame') = model { frame = frame' }
+updateModel model (Tag   tag'  ) = model { tag = tag'     }
 
 runCmd :: Stmt String String -> M (Maybe Bool)
 runCmd (Def s f) = do (model, vars) <- get
@@ -46,17 +56,12 @@ runCmd (Def s f) = do (model, vars) <- get
 runCmd (Set s)   = do (model, vars) <- get
                       put (updateModel model s, vars)
                       return Nothing
-runCmd (Expr op) = do env <- get
-                      return Nothing
-                      -- case eval op env of
-                      --   Right result -> return $ Just result
-                      --   Left  err    -> return $ Left err
+runCmd (Expr op) = do Just . eval op <$> get
 
-eval :: Op String String -> Env a -> Except String Bool
-eval = undefined
--- eval (Valid f) = runReader (validInModel f)
--- eval (Satis f) = runReader (satisfiableInModel f)
--- eval (Sequent w f) = runReader ()
-
--- instance Bifunctor SetStmt where
--- bimap f g ()
+eval :: Eq a => Op String a -> Env a -> Bool
+eval op = runReader evalFun
+  where
+    evalFun = case op of
+      Valid f     -> validInModel f
+      Satis f     -> satisfiableInModel f
+      Sequent w f -> w ||- f
