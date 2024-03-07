@@ -3,6 +3,17 @@ module Main (main) where
 main :: IO ()
 main = print "holi"
 
+{- Core function to parse and convert a formula
+import Control.Monad.Trans.Reader
+import Data.Either
+
+parseF env s = toFormula (fromRight (error "undef var") $ litFormula s)
+  where
+    litFormula s = runReaderT (scheme s) env
+    scheme s = fromRight (error "parse error") $ parseFormula s 1 "stdin"
+
+-}
+
 {-
 import           System.Console.Haskeline
 import qualified Control.Monad.Catch           as MC

@@ -89,29 +89,26 @@ model = asks fst
 defs :: Reader (Env a) (DefTable a)
 defs = asks snd
 
+evalInWorlds :: Eq a => Formula a -> [World] -> Reader (Env a) [Bool]
+evalInWorlds f = mapM (||- f)
+
 (||-) :: Eq a => World -> Formula a -> Reader (Env a) Bool
 _ ||- Bottom         = return False
 _ ||- Top            = return True
-w ||- (Atomic p)     = do m <- model
-                          return $ elem p (validAtoms m w)
+w ||- (Atomic p)     = model >>= \m -> return $ elem p (validAtoms m w)
 w ||- (Not f)        = liftM not (w ||- f)
 w ||- (And f1 f2)    = liftM2 (&&) (w ||- f1) (w ||- f2)
 w ||- (Or  f1 f2)    = liftM2 (||) (w ||- f1) (w ||- f2)
 w ||- (Imply f1 f2)  = liftM2 (<=) (w ||- f1) (w ||- f2)
 w ||- (Iff f1 f2)    = liftM2 (==) (w ||- f1) (w ||- f2)
-w ||- (Square f)     = do m <- model
-                          liftM and $ mapM (||- f) (nextStates m w)
-w ||- (Diamond f)    = do m <- model
-                          liftM or  $ mapM (||- f) (nextStates m w)
--- liftM and (sequence [readT True, readT False])
--- 
+w ||- (Square f)     = model >>= \m -> liftM and $ evalInWorlds f (nextStates m w)
+w ||- (Diamond f)    = model >>= \m -> liftM or  $ evalInWorlds f (nextStates m w)
 
 satisfiableInModel :: Eq a => Formula a -> Reader (Env a) Bool
-satisfiableInModel = undefined
--- satisfiableInModel f = do (model, defs) <- ask
-                          -- let w = worlds model
-                          -- return $ any ((||-) m f) w
+satisfiableInModel f = do m <- model
+                          bs <- evalInWorlds f (worlds m)
+                          return (and bs)
 
 validInModel :: Eq a => Formula a -> Reader (Env a) Bool
--- validInModel m f = not $ satisfiableInModel m $ Not f
-validInModel = undefined
+validInModel f = do b <- satisfiableInModel (Not f)
+                    return (not b)
