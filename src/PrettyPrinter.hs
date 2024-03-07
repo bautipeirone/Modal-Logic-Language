@@ -14,7 +14,8 @@ import Data.Maybe (fromMaybe)
 toLatex :: Formula a -> String
 toLatex = undefined
 
-type Color = Doc () -> Doc ()
+type FDoc = Doc ()
+type Color = FDoc -> FDoc
 type Coloring a = [(a, Color)]
 
 resetColor :: Color
@@ -25,69 +26,60 @@ createColor bold hex doc = resetColor (pretty ansiColor <> doc)
       where ansiColor = concat ["\ESC[", boldCode, ";", hex, "m"]
             boldCode = if bold then "1" else "0"
 
-blue, magenta, cyan, red, green, dred, dgreen :: Color
-dred    = createColor False "31"
-dgreen  = createColor False "32"
+red, green, orange, blue, magenta, cyan :: Color
 red     = createColor True "91"
 green   = createColor True "92"
-orange  = createColor False "93"
-blue    = createColor False "94"
-magenta = createColor False "95"
-cyan    = createColor False "96"
+orange  = createColor True "93"
+blue    = createColor True "94"
+magenta = createColor True "95"
+cyan    = createColor True "96"
 
 defaultColors :: [Color]
 defaultColors = cycle colors
-  where colors = [orange, blue, magenta, cyan, dred, dgreen]
-
+  where colors = [orange, blue, magenta, cyan]
 
 assignColors :: [a] -> Coloring a
 assignColors = flip zip defaultColors
 
-pp :: Formula String -> Doc ()
+pp :: Formula String -> FDoc
 pp f = let col = assignColors (atoms f) in pp' col f 
   where
-    pp' :: Coloring String -> Formula String -> Doc ()
-    pp' col  Bottom        = red   $ pretty "⊥"
-    pp' col  Top           = green $ pretty "⊤"
-    pp' col  (Atomic x)    = let c = fromMaybe id (lookup x col) in c $ pretty x
-    pp' col  (Not f)       = pretty "¬" <> pp' col f
-    pp' col  (Square f)    = pretty "□" <> pp' col f
-    pp' col  (Diamond f)   = pretty "◇" <> pp' col f
-    pp' col  (And f1 f2)   = pp' col f1 <> (pretty " ∧ ") <> pp' col f2
-    pp' col  (Or f1 f2)    = pp' col f1 <> (pretty " ∨ ") <> pp' col f2
-    pp' col  (Imply f1 f2) = pp' col f1 <> (pretty " → ") <> pp' col f2
-    pp' col  (Iff f1 f2)   = pp' col f1 <> (pretty " ↔ ") <> pp' col f2
+    pp' :: Coloring String -> Formula String -> FDoc
+    pp' col  Bottom        = red   $ pretty "F" -- ⊥
+    pp' col  Top           = green $ pretty "T" -- ⊤
+    pp' col  (Atomic x)    = let c = fromMaybe id (lookup x col) in c (pretty x)
+    pp' col  (Not f)       = ppUnary col (pretty "!") f -- ¬
+    pp' col  (Square f)    = ppUnary col (pretty "□") f
+    pp' col  (Diamond f)   = ppUnary col (pretty "◇") f
+    pp' col  (Or f1 f2)    = let pred f = isBinary f && not (isOr f)
+                             in ppBinary col pred (pretty " || ") f1 f2 -- ∨
+    pp' col  (And f1 f2)   = let pred f = isImply f || isIff f
+                             in ppBinary col pred (pretty " && ") f1 f2  -- ∧
+    pp' col  (Imply f1 f2) = let p1 = parensIf (isImply f1 || isIff f1)
+                                 p2 = parensIf (isIff f2)
+                             in  p1 (pp' col f1) <> pretty " -> " <> p2 (pp' col f2) -- →
+    pp' col  (Iff f1 f2)   = ppBinary col isIff (pretty " <-> ") f1 f2      -- ↔
+    ppUnary col sym f = let p = parensIf (isBinary f)
+                        in sym <> p (pp' col f)
+    ppBinary col pred sym f1 f2 = let p1 = parensIf (pred f1)
+                                      p2 = parensIf (pred f2)
+                                  in p1 (pp' col f1) <> sym <> p2 (pp' col f2)
 
-parensIf :: Bool -> String -> String
-parensIf True  s = "(" ++ s ++ ")"
-parensIf False s = s
+-- * operador unario, + operador binario
+-- (* (+ x y)) se escribe como * (x + y)
+-- Un operador or pone parentesis si su argumento es un operador binario excepto para el or.
+-- Indistinto para argumento izquierdo o derecho
+-- Un operador and pone parentesis si su argumento es el operador -> o <->.
+-- Indistinto para argumento izquierdo o derecho
+-- El operador -> asocia a derecha, y por ende lleva parentesis en su argumento
+-- izquierdo cuando este es un operador -> o <->. A su argumento derecho solo
+-- le pone parentesis cuando es un <->.
+-- El operador <-> nunca pone parentesis a sus argumentos ya que es el de menor
+-- precedencia.
 
--- Abstracts the abstract to concrete syntax
--- merge: function to merge representantions
--- fs (from string) transforms from string to representation
--- fa (from atom)   transforms from atom to representation
--- formulaToRepr :: (s -> s -> s) -> (String -> s) -> (a -> s) -> Formula a -> s
--- formulaToRepr merge fs fa Bottom = fs "F"
--- formulaToRepr merge fs fa Top    = fs "T"
--- formulaToRepr merge fs fa (Atomic x) = fa x
--- formulaToRepr merge fs fa (Not p) = (fs "not ") ++ (parensIf (isBinary p) (show p))
--- show (And p q) = (parensIf (cond p) (show p)) ++ " and " ++ (parensIf (cond q) (show q))
---   where
---     cond p = any ($ p) [isImply, isIff]
--- show (Or p q) = (parensIf (cond p) (show p)) ++ " or " ++ (parensIf (cond q) (show q))
---   where
---     cond p = any ($ p) [isImply, isAnd, isIff]
--- show (Imply p q) = (parensIf leftC (show p)) ++ " -> " ++ (parensIf rightC (show q))
---   where
---     leftC  = any ($ p) [isImply, isIff]
---     rightC = any ($ p) [isAnd, isOr, isIff]
--- show (Iff p q) = show p ++ " <-> " ++ show q
--- show (Square p)  = "[]" ++ (parensIf (isBinary p) (show p))
--- show (Diamond p) = "<>" ++ (parensIf (isBinary p) (show p))
-
--- La instancia devuelve la representancion lo mas simplificada posible
--- Es decir, remueve todos los parentesis redundantes que sean posibles
--- instance Show a => Show (Formula a) where
+parensIf :: Bool -> FDoc -> FDoc
+parensIf True  = parens
+parensIf False = id
 
 isTop :: Formula a -> Bool
 isTop Top = True
