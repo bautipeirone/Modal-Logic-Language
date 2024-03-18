@@ -2,7 +2,6 @@
 module Modal
   ( Model (..)
   , TagMapping
-  , Env
   , toFormula
   , buildFrame
   , buildTag
@@ -12,8 +11,11 @@ module Modal
 ) where
 
 import Common
+import Prelude hiding (log)
 import Control.Monad (liftM, liftM2)
 import Control.Monad.Reader
+import Control.Monad.Writer
+import Data.Bifunctor
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -21,14 +23,13 @@ import Data.Maybe (fromMaybe)
 
 import Frame
 
-type World = String
 type TagMapping w a = M.Map w (S.Set a)
 {-
 TODO implementar instancia de Show para TagMapping. Para hacer esto deberia
 convertirlo a un newtype
 -}
 
-type Env a = (Model World a, DefTable a)
+type EvalM a = Reader (Model World Atom) a
 
 data Model w a = Model
       { frame :: Graph w
@@ -76,39 +77,64 @@ buildFrame = graphFromEdges
 buildTag :: (Ord w, Ord a) => [(w, [a])] -> TagMapping w a
 buildTag = fmap S.fromList . M.fromListWith (++)
 
-validAtoms :: Model World a -> World -> S.Set a
+validAtoms :: Model World Atom -> World -> S.Set Atom
 validAtoms m w = fromMaybe S.empty (M.lookup w l)
           where l = tag m
 
 nextStates :: Model World a -> World -> [World]
 nextStates m = neighbours (frame m)
 
-model :: Reader (Env a) (Model World a)
-model = asks fst
-
-defs :: Reader (Env a) (DefTable a)
-defs = asks snd
-
-evalInWorlds :: Eq a => Formula a -> [World] -> Reader (Env a) [Bool]
+evalInWorlds :: Formula Atom -> [World] -> EvalM [Trace]
 evalInWorlds f = mapM (||- f)
 
-(||-) :: Eq a => World -> Formula a -> Reader (Env a) Bool
-_ ||- Bottom         = return False
-_ ||- Top            = return True
-w ||- (Atomic p)     = model >>= \m -> return $ elem p (validAtoms m w)
-w ||- (Not f)        = liftM not (w ||- f)
-w ||- (And f1 f2)    = liftM2 (&&) (w ||- f1) (w ||- f2)
-w ||- (Or  f1 f2)    = liftM2 (||) (w ||- f1) (w ||- f2)
-w ||- (Imply f1 f2)  = liftM2 (<=) (w ||- f1) (w ||- f2)
-w ||- (Iff f1 f2)    = liftM2 (==) (w ||- f1) (w ||- f2)
-w ||- (Square f)     = model >>= \m -> liftM and $ evalInWorlds f (nextStates m w)
-w ||- (Diamond f)    = model >>= \m -> liftM or  $ evalInWorlds f (nextStates m w)
+-- log :: Formula Atom -> Bool -> EvalM ()
+-- log f b = do   <- get
+              -- tell $ indent n $ show f ++ ": " ++ show b ++ "\n"
 
-satisfiableInModel :: Eq a => Formula a -> Reader (Env a) Bool
-satisfiableInModel f = do m <- model
-                          bs <- evalInWorlds f (worlds m)
-                          return (and bs)
+(||-) :: World -> Formula Atom -> EvalM Trace
+_ ||- f@Bottom         = return $ Trace f False []
+_ ||- f@Top            = return $ Trace f True  []
+w ||- f@(Atomic p)     = do model <- ask
+                            let b = p `elem` validAtoms model w
+                            return $ Trace f b []
+w ||- f@(Not f1)       = do t <- w ||- f1
+                            let b = not (evalTrace t)
+                            return $ Trace f b [t]
+w ||- f@(And f1 f2)    = do t1 <- w ||- f1
+                            t2 <- w ||- f2
+                            let b = evalTrace t1 && evalTrace t2
+                            return $ Trace f b [t1,t2]
+w ||- f@(Or f1 f2)     = do t1 <- w ||- f1
+                            t2 <- w ||- f2
+                            let b = evalTrace t1 || evalTrace t2
+                            return $ Trace f b [t1,t2]
+w ||- f@(Imply f1 f2)  = do t1 <- w ||- f1
+                            t2 <- w ||- f2
+                            let b = evalTrace t1 <= evalTrace t2
+                            return $ Trace f b [t1,t2]
+w ||- f@(Iff f1 f2)    = do t1 <- w ||- f1
+                            t2 <- w ||- f2
+                            let b = evalTrace t1 == evalTrace t2
+                            return $ Trace f b [t1,t2]
+w ||- f@(Square f1)    = do model <- ask
+                            ts <- mapM (||- f1) (nextStates model w)
+                            let b = all evalTrace ts
+                            return $ Trace f b ts
+w ||- f@(Diamond f1)   = do model <- ask
+                            ts <- mapM (||- f1) (nextStates model w)
+                            let b = any evalTrace ts
+                            return $ Trace f b ts
 
-validInModel :: Eq a => Formula a -> Reader (Env a) Bool
-validInModel f = do b <- satisfiableInModel (Not f)
-                    return (not b)
+satisfiableInModel :: Formula Atom -> EvalM ModelTrace
+satisfiableInModel f = do m <- ask
+                          ts <- mapM (||- f) (worlds m)
+                          let b = any evalTrace ts
+                          let wTraces = zip (worlds m) ts
+                          return $ ModelTrace b wTraces
+
+validInModel :: Formula Atom -> EvalM ModelTrace
+validInModel f = do m <- ask
+                    ts <- mapM (||- f) (worlds m)
+                    let b = all evalTrace ts
+                    let wTraces = zip (worlds m) ts
+                    return $ ModelTrace b wTraces

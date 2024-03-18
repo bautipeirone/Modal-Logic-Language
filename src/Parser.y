@@ -51,10 +51,10 @@ import Modal
   isValid   { TIsValid }
   isSatis   { TIsSatis }
 
-%nonassoc '<->'
+%right '<->'
 %right '->'
-%right and
-%right or
+%left or
+%left and
 %nonassoc not
 %nonassoc square diamond
 
@@ -86,25 +86,25 @@ Map :: { [(String, [String])] }
 Map : '{' collection(ElementMapping, ',') '}' { $2 }
 
 -- ######## GRAMMAR PARSERS ########
-File    :: { [Lookup (Stmt String) String] }
+File    :: { [Lookup (Stmt World) Atom] }
 File    : Stmt File { $1 : $2 }
         |           { [] }
 
-Stmt  :: { Lookup (Stmt String) String }
+Stmt  :: { Lookup (Stmt World) Atom }
 Stmt  : def ident '=' FExp { liftM ((Def $2) . toFormula) $4 }
       | Exp                { liftM Expr $1 }
       | SetStmt            { return $ Set $1 }
 
-SetStmt :: { SetStmt String String }
+SetStmt :: { SetStmt World Atom }
 SetStmt : set frame  '=' Map { Frame (buildFrame $4) }
         | set tag    '=' Map { Tag   (buildTag   $4) }
 
-Exp :: { Lookup (Op String) String }
+Exp :: { Lookup (Op World) Atom }
 Exp : isValid FExp       { liftM (Valid . toFormula) $2 }
     | isSatis FExp       { liftM (Satis . toFormula) $2 }
-    | keyword '||-' FExp { liftM ((Sequent $1) . toFormula) $3 }
+    | keyword '||-' FExp { liftM (Sequent $1 . toFormula) $3 }
 
-FExp  :: { Scheme String }
+FExp  :: { Scheme Atom }
 FExp  : FExp and FExp   { liftM2 LAnd $1 $3 }
       | FExp or  FExp   { liftM2 LOr  $1 $3 }
       | FExp '->'  FExp { liftM2 LImply $1 $3}

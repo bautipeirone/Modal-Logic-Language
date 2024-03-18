@@ -4,6 +4,9 @@ main :: IO ()
 main = print "holi"
 
 {- Core function to parse and convert a formula
+import Control.Monad.Trans.Writer
+import Data.Functor.Identity
+import Control.Monad.RWS
 import Control.Monad.Trans.Reader
 import Data.Either
 

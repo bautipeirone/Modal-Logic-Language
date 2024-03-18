@@ -10,15 +10,15 @@ import Modal
 -- import PrettyPrinter
 import Common
 import Frame
+import Control.Monad (liftM)
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Reader
-import Control.Monad.Error.Class
 
 data SetStmt w a  = Frame (Graph w)
                   | Tag (TagMapping w a)
                   deriving Show
 
-data Stmt w a = Def String (Formula a)
+data Stmt w a = Def a (Formula a)
               | Expr (Op w a)
               | Set (SetStmt w a)
 
@@ -38,7 +38,15 @@ instance (Show w, Show a) => Show (Op w a) where
   show (Sequent w f) = show w ++ " ||- " ++ show f
 {------------------------------}
 
-type M a = StateT (Env String) (Either String) a
+type Env = (Model World Atom, DefTable Atom)
+
+type M a = StateT Env (Either String) a
+
+getModel :: M (Model World Atom)
+getModel = gets fst
+
+getDefs :: M (DefTable Atom)
+getDefs = gets snd
 
 updateDef :: Eq a => DefTable a -> a -> Formula a -> DefTable a
 updateDef [] var f = [(var, f)]
@@ -47,21 +55,22 @@ updateDef (def@(var',_):defs) var f | var == var' = (var, f) : defs
 
 updateModel :: Model w a -> SetStmt w a -> Model w a
 updateModel model (Frame frame') = model { frame = frame' }
-updateModel model (Tag   tag'  ) = model { tag = tag'     }
+updateModel model (Tag   tag'  ) = model { tag   = tag'   }
 
-runCmd :: Stmt String String -> M (Maybe Bool)
+runCmd :: Stmt World Atom -> M (Maybe Eval)
 runCmd (Def s f) = do (model, vars) <- get
                       put (model, updateDef vars s f)
                       return Nothing
 runCmd (Set s)   = do (model, vars) <- get
                       put (updateModel model s, vars)
                       return Nothing
-runCmd (Expr op) = do Just . eval op <$> get
+runCmd (Expr op) = do model <- getModel
+                      return $ Just (eval op model)
 
-eval :: Eq a => Op String a -> Env a -> Bool
+eval :: Op World Atom -> Model World Atom -> Eval
 eval op = runReader evalFun
   where
     evalFun = case op of
-      Valid f     -> validInModel f
-      Satis f     -> satisfiableInModel f
-      Sequent w f -> w ||- f
+      Valid f     -> Right <$> validInModel f
+      Satis f     -> Right <$> satisfiableInModel f
+      Sequent w f -> Left  <$> w ||- f

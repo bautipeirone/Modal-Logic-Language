@@ -7,6 +7,11 @@ module Common
   , LitFormula (..)
   , Formula (..)
   , Result
+  , World
+  , Atom
+  , Trace (..)
+  , ModelTrace (..)
+  , Eval
   , atoms
   , undefVarError
   , liftFormula
@@ -17,12 +22,32 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Error.Class (throwError)
 import Data.List (singleton, nub)
 
+type World = String
+type Atom  = String
+
 type Result a = Either String a
 
 type DefTable a = [(a, Formula a)]
 
 type Lookup m a = ReaderT (DefTable a) (Either String) (m a)
 type Scheme a = Lookup LitFormula a
+
+-- A Trace contains the result of evaluation of a formula and all of its subformulas
+data Trace = Trace  { getTraceHead   :: Formula Atom
+                    , evalTrace   :: Bool
+                    , getSubtrace :: [Trace]
+                    } deriving Show
+
+-- A ModelTrace is like a Trace but for operations that are computed over all
+-- the worlds of a model. This way, this type contains the result of the operation
+-- and the trace of the formula for each world.
+data ModelTrace = ModelTrace
+                    { evalModel :: Bool
+                    , getWorldTraces :: [(World, Trace)]
+                    } deriving Show
+
+-- Abstracts evaluation traces
+type Eval = Either Trace ModelTrace
 
 -- Only intended as an intermediate result of the parser. It is not used
 -- for evaluation.
@@ -51,26 +76,13 @@ data Formula a  = Bottom
                 | Diamond (Formula a)
                 deriving (Show, Foldable, Functor)
 
--- instance Functor Formula where
---   fmap g Bottom        = Bottom
---   fmap g Top           = Top
---   fmap g (Atomic p)    = Atomic (g p)
---   -- fmap g (Global v)    = Global (g v)
---   fmap g (Not f)       = Not (fmap g f)
---   fmap g (And   f1 f2) = And (fmap g f1) (fmap g f2)
---   fmap g (Or    f1 f2) = Or  (fmap g f1) (fmap g f2)
---   fmap g (Imply f1 f2) = Imply (fmap g f1) (fmap g f2)
---   fmap g (Iff   f1 f2) = Iff (fmap g f1) (fmap g f2)
---   fmap g (Square  f)   = Square (fmap g f)
---   fmap g (Diamond f)   = Diamond (fmap g f)
-
-undefVarError :: Show a => a -> Scheme a
-undefVarError s = throwError $ "Undefined identifier " ++ show s
+undefVarError :: Atom -> Scheme Atom
+undefVarError s = throwError $ "Undefined identifier " ++ s
 
 atoms :: Eq a => Formula a -> [a]
 atoms = nub . foldMap singleton
 
-liftFormula :: Eq a => Formula a -> Scheme a
+liftFormula :: Formula Atom -> Scheme Atom
 liftFormula Bottom        = return LBottom
 liftFormula Top           = return LTop
 liftFormula (Atomic x)    = return (LAtomic x)

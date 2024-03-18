@@ -1,5 +1,6 @@
 module PrettyPrinter
   ( pp
+  , ppTrace
   ) where
 
 -- import Core
@@ -9,6 +10,8 @@ import Prelude hiding ((<>))
 -- import Text.PrettyPrint.HughesPJ
 import Prettyprinter
 import Data.Maybe (fromMaybe)
+
+type FPrinter = Formula Atom -> FDoc
 
 -- Translation of formula to LaTeX
 toLatex :: Formula a -> String
@@ -41,30 +44,31 @@ defaultColors = cycle colors
 assignColors :: [a] -> Coloring a
 assignColors = flip zip defaultColors
 
-pp :: Formula String -> FDoc
-pp f = let col = assignColors (atoms f) in pp' col f 
+ppFormula :: FPrinter
+ppFormula f = let col = assignColors (atoms f) in pp col f
+
+pp :: Coloring Atom -> FPrinter
+pp = pp'
   where
-    pp' :: Coloring String -> Formula String -> FDoc
-    pp' col  Bottom        = red   $ pretty "F" -- ⊥
-    pp' col  Top           = green $ pretty "T" -- ⊤
-    pp' col  (Atomic x)    = let c = fromMaybe id (lookup x col) in c (pretty x)
-    pp' col  (Not f)       = ppUnary col (pretty "!") f -- ¬
-    pp' col  (Square f)    = ppUnary col (pretty "□") f
-    pp' col  (Diamond f)   = ppUnary col (pretty "◇") f
-    pp' col  (Or f1 f2)    = let pred f = isBinary f && not (isOr f)
-                             in ppBinary col pred (pretty " || ") f1 f2 -- ∨
-    pp' col  (And f1 f2)   = let pred f = isImply f || isIff f
-                             in ppBinary col pred (pretty " && ") f1 f2  -- ∧
-    pp' col  (Imply f1 f2) = let p1 = parensIf (isImply f1 || isIff f1)
-                                 p2 = parensIf (isIff f2)
-                             in  p1 (pp' col f1) <> pretty " -> " <> p2 (pp' col f2) -- →
-    pp' col  (Iff f1 f2)   = ppBinary col isIff (pretty " <-> ") f1 f2      -- ↔
+    pp' col  Bottom         = red   $ pretty "F" -- ⊥
+    pp' col  Top            = green $ pretty "T" -- ⊤
+    pp' col  (Atomic x)     = let c = fromMaybe id (lookup x col) in c (pretty x)
+    pp' col  (Not f1)       = ppUnary col (pretty "!") f1 -- ¬
+    pp' col  (Square f1)    = ppUnary col (pretty "□") f1
+    pp' col  (Diamond f1)   = ppUnary col (pretty "◇") f1
+    pp' col  (Or f1 f2)     = let pred f = isBinary f && not (isOr f)
+                              in ppBinary col pred (pretty " || ") f1 f2 -- ∨
+    pp' col  (And f1 f2)    = let pred f = isImply f || isIff f
+                              in ppBinary col pred (pretty " && ") f1 f2  -- ∧
+    pp' col  (Imply f1 f2)  = let p1 = parensIf (isImply f1 || isIff f1)
+                                  p2 = parensIf (isIff f2)
+                              in  p1 (pp' col f1) <> pretty " -> " <> p2 (pp' col f2) -- →
+    pp' col  (Iff f1 f2)    = ppBinary col isIff (pretty " <-> ") f1 f2      -- ↔
     ppUnary col sym f = let p = parensIf (isBinary f)
                         in sym <> p (pp' col f)
     ppBinary col pred sym f1 f2 = let p1 = parensIf (pred f1)
                                       p2 = parensIf (pred f2)
                                   in p1 (pp' col f1) <> sym <> p2 (pp' col f2)
-
 -- * operador unario, + operador binario
 -- (* (+ x y)) se escribe como * (x + y)
 -- Un operador or pone parentesis si su argumento es un operador binario excepto para el or.
@@ -77,6 +81,25 @@ pp f = let col = assignColors (atoms f) in pp' col f
 -- El operador <-> nunca pone parentesis a sus argumentos ya que es el de menor
 -- precedencia.
 
+{------------ Trace Pretty Printing ------------}
+ppTrace :: Trace -> FDoc
+ppTrace t = let col = assignColors (atoms (getTraceHead t)) in ppTrace' col t
+  where
+    ppTrace' :: Coloring Atom -> Trace -> FDoc
+    ppTrace' col t =  let docs = fmap (ppTrace' col) (getSubtrace t)
+                          backtrace = if null docs then emptyDoc
+                                                    else (indent 2 (vsep docs)) <> line
+                          result = hsep [ pp col (getTraceHead t)
+                                        , colon
+                                        , space
+                                        , ppBool (evalTrace t)
+                                        ]
+                      in backtrace <> result
+    ppBool :: Bool -> FDoc
+    ppBool True  = green $ pretty True
+    ppBool False = red   $ pretty False
+
+{------------------ Utilities ------------------}
 parensIf :: Bool -> FDoc -> FDoc
 parensIf True  = parens
 parensIf False = id
