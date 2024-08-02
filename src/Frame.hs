@@ -2,6 +2,7 @@ module Frame
   ( Graph (vertices, edges)
   , graphFromEdges
   , neighbours
+  , GraphProperty
   , isReflexive
   , isSymmetric
   , isSerial

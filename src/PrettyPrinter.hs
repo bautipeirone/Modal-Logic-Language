@@ -1,6 +1,7 @@
 module PrettyPrinter
   ( pp
   , ppTrace
+  , ppModelTrace
   ) where
 
 -- import Core
@@ -10,6 +11,7 @@ import Prelude hiding ((<>))
 -- import Text.PrettyPrint.HughesPJ
 import Prettyprinter
 import Data.Maybe (fromMaybe)
+import Data.Bifunctor
 
 type FPrinter = Formula Atom -> FDoc
 
@@ -86,18 +88,49 @@ ppTrace :: Trace -> FDoc
 ppTrace t = let col = assignColors (atoms (getTraceHead t)) in ppTrace' col t
   where
     ppTrace' :: Coloring Atom -> Trace -> FDoc
-    ppTrace' col t =  let docs = fmap (ppTrace' col) (getSubtrace t)
-                          backtrace = if null docs then emptyDoc
-                                                    else (indent 2 (vsep docs)) <> line
-                          result = hsep [ pp col (getTraceHead t)
-                                        , colon
-                                        , space
-                                        , ppBool (evalTrace t)
-                                        ]
-                      in backtrace <> result
-    ppBool :: Bool -> FDoc
-    ppBool True  = green $ pretty True
-    ppBool False = red   $ pretty False
+    ppTrace' col t = let backtrace = case (getSubtrace t) of
+                                       Left ts -> concatSubForms (ppTrace' col) ts
+                                       Right wts -> concatWorldSteps (ppTrace' col) wts
+                         result = ppEval col (getTraceHead t) (evalTrace t)
+                     in backtrace <> result
+
+ppModelTrace :: ModelTrace -> FDoc
+ppModelTrace mt = let backtrace = concatWorldSteps ppTrace (getWorldTraces mt)
+                      result = ppEval (assignColors $ atoms $ getFormula mt) (getFormula mt) (evalModel mt)
+                  in backtrace <> result
+
+ppEval :: Coloring Atom -> Formula Atom -> Bool -> FDoc
+ppEval col f b = hsep [ pp col f
+                      , colon
+                      , space
+                      , ppBool b
+                      ]
+
+ppBool :: Bool -> FDoc
+ppBool True  = green $ pretty True
+ppBool False = red   $ pretty False
+
+concatSubForms :: (Trace -> FDoc) -> [Trace] -> FDoc
+concatSubForms printer ts = let docs = fmap printer ts
+                                backtrace = if null docs then emptyDoc
+                                                         else (indent 2 (vsep docs)) <> line
+                            in backtrace
+
+lineSep:: FDoc
+lineSep = pretty "--------------------------"
+
+encloseSubtrace :: (World, FDoc) -> FDoc
+encloseSubtrace (w, doc) = vsep [ (pretty w) <> colon
+                                , doc
+                                , lineSep
+                                ]
+
+concatWorldSteps :: (Trace -> FDoc) -> [(World, Trace)] -> FDoc
+concatWorldSteps printer wts = let docs = fmap (second ((indent 2) . printer)) wts
+                                   docs' = fmap encloseSubtrace docs
+                                   backtrace = if null docs then emptyDoc
+                                                            else (vsep docs') <> line
+                               in backtrace
 
 {------------------ Utilities ------------------}
 parensIf :: Bool -> FDoc -> FDoc

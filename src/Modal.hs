@@ -92,49 +92,66 @@ evalInWorlds f = mapM (||- f)
               -- tell $ indent n $ show f ++ ": " ++ show b ++ "\n"
 
 (||-) :: World -> Formula Atom -> EvalM Trace
-_ ||- f@Bottom         = return $ Trace f False []
-_ ||- f@Top            = return $ Trace f True  []
+_ ||- f@Bottom         = return $ Trace f False (subforms [])
+_ ||- f@Top            = return $ Trace f True  (subforms [])
 w ||- f@(Atomic p)     = do model <- ask
                             let b = p `elem` validAtoms model w
-                            return $ Trace f b []
+                            return $ Trace f b (subforms [])
 w ||- f@(Not f1)       = do t <- w ||- f1
                             let b = not (evalTrace t)
-                            return $ Trace f b [t]
+                            return $ Trace f b (subforms [t])
 w ||- f@(And f1 f2)    = do t1 <- w ||- f1
                             t2 <- w ||- f2
                             let b = evalTrace t1 && evalTrace t2
-                            return $ Trace f b [t1,t2]
+                            return $ Trace f b (subforms [t1,t2])
 w ||- f@(Or f1 f2)     = do t1 <- w ||- f1
                             t2 <- w ||- f2
                             let b = evalTrace t1 || evalTrace t2
-                            return $ Trace f b [t1,t2]
+                            return $ Trace f b (subforms [t1,t2])
 w ||- f@(Imply f1 f2)  = do t1 <- w ||- f1
                             t2 <- w ||- f2
                             let b = evalTrace t1 <= evalTrace t2
-                            return $ Trace f b [t1,t2]
+                            return $ Trace f b (subforms [t1,t2])
 w ||- f@(Iff f1 f2)    = do t1 <- w ||- f1
                             t2 <- w ||- f2
                             let b = evalTrace t1 == evalTrace t2
-                            return $ Trace f b [t1,t2]
+                            return $ Trace f b (subforms [t1,t2])
 w ||- f@(Square f1)    = do model <- ask
                             ts <- mapM (||- f1) (nextStates model w)
                             let b = all evalTrace ts
-                            return $ Trace f b ts
+                            let subTraces = worldSteps (zip (nextStates model w) ts)
+                            return $ Trace f b subTraces
 w ||- f@(Diamond f1)   = do model <- ask
                             ts <- mapM (||- f1) (nextStates model w)
                             let b = any evalTrace ts
-                            return $ Trace f b ts
+                            let subTraces = worldSteps (zip (nextStates model w) ts)
+                            return $ Trace f b subTraces
 
+{-
+--propConstantEval :: Formula Atom -> Bool -> EvalM Trace
+propConstantEval f b = return $ Trace f b (subforms [])
+
+--propUnaryEval :: World -> Formula Atom -> (Bool -> Bool) -> (Bool, Either [Trace] [(World, Trace)])
+propUnaryEval w f op = do t <- w ||- f
+                          let b = op (evalTrace t)
+                          return $ Trace _ b (subforms [t])
+
+--propBinaryEval :: World -> Formula Atom -> Formula Atom -> (Bool -> Bool -> Bool) -> EvalM Trace
+propBinaryEval w f1 f2 op = do t1 <- w ||- f1
+                               f2 <- w ||- f2
+                               let b = evalTrace t1 `op` evalTrace t2
+                               return $ Trace f b 
+-}
 satisfiableInModel :: Formula Atom -> EvalM ModelTrace
 satisfiableInModel f = do m <- ask
                           ts <- mapM (||- f) (worlds m)
                           let b = any evalTrace ts
                           let wTraces = zip (worlds m) ts
-                          return $ ModelTrace b wTraces
+                          return $ ModelTrace f b wTraces
 
 validInModel :: Formula Atom -> EvalM ModelTrace
 validInModel f = do m <- ask
                     ts <- mapM (||- f) (worlds m)
                     let b = all evalTrace ts
                     let wTraces = zip (worlds m) ts
-                    return $ ModelTrace b wTraces
+                    return $ ModelTrace f b wTraces
