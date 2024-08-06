@@ -2,6 +2,7 @@
 module Parser where
 
 import Control.Monad
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader
 import Control.Monad.Error.Class (throwError)
 
@@ -10,11 +11,13 @@ import Data.Maybe
 import Core
 import Common
 import Modal
+import Axioms
 }
 
 %name parseFormula FExp
 %name parseStmt    Stmt
 %name parseFile    File
+%name parseLogic   Logic
 
 %tokentype { Token }
 %error { parseError }
@@ -37,6 +40,8 @@ import Modal
   '||-'     { TSequent }
   ident     { TIdent $$ }
   keyword   { TKeyword $$ }
+  logic     { TLogic $$ }
+  axiom     { TAxiom $$ }
   and       { TAnd }
   or        { TOr }
   not       { TNot }
@@ -50,6 +55,7 @@ import Modal
   tag       { TTag }
   isValid   { TIsValid }
   isSatis   { TIsSatis }
+  assume    { TAssume }
 
 %right '<->'
 %right '->'
@@ -76,11 +82,11 @@ collection(p, sep)  : collection(p, sep) sep p     { $3 : $1 }
                     | p                            { [$1] }
                     |                              { [] }
 
-Set :: { [String] }  -- Conjunto matematico por extension, no el token set
-Set : '{' collection(keyword, ',') '}' { $2 }
+-- Set :: { [String] }  -- Conjunto matematico por extension, no el token set
+Set(p) : '{' collection(p, ',') '}' { $2 }
 
 ElementMapping  :: { (String, [String]) }
-ElementMapping  : keyword '->' Set     { ($1, $3) }
+ElementMapping  : keyword '->' Set(keyword)   { ($1, $3) }
 
 Map :: { [(String, [String])] }
 Map : '{' collection(ElementMapping, ',') '}' { $2 }
@@ -102,6 +108,7 @@ SetStmt : set frame  '=' Map { Frame (buildFrame $4) }
 Exp :: { Lookup (Op World) Atom }
 Exp : isValid FExp       { liftM (Valid . toFormula) $2 }
     | isSatis FExp       { liftM (Satis . toFormula) $2 }
+    | assume Logic       { lift (fmap Assume $2) }
     | keyword '||-' FExp { liftM (Sequent $1 . toFormula) $3 }
 
 FExp  :: { Scheme Atom }
@@ -119,12 +126,17 @@ FExp  : FExp and FExp   { liftM2 LAnd $1 $3 }
       | FExp '[' FExp '/' keyword ']' { liftM2 (\x y -> LSub x y $5) $1 $3 }
       | '(' FExp ')'    { $2 }
 
+Logic   :: { Either String Logic }
+        : logic         { identToLogic $1 }
+        | Set(axiom)    { listToLogic $1 }
+
 {
 data Token  = TKeyword String -- Built in function or atomic proposition identifier
             | TIdent   String -- Global definition identifier (used for schemes)
+            | TLogic   String -- Logic identifier, written as Logic-ID where ID is the identifier
+            | TAxiom   String -- Axiom identifier, written as Axiom-ID where ID is the identifier
             | TDef
             | TEq
-            | TUse
             | TSet
             -- Formulas
             | TAnd
@@ -140,6 +152,7 @@ data Token  = TKeyword String -- Built in function or atomic proposition identif
             | TIsValid
             | TIsSatis
             | TSequent
+            | TAssume
             -- Modelo
             | TFrame
             | TTag
@@ -195,10 +208,10 @@ modalLexer cont s n path =
     ('}':r) -> cont TCloseBraces r n path
     ('[':r) -> cont TOpenSqBrackets  r n path
     (']':r) -> cont TCloseSqBrackets r n path
-    ('!':r) ->       cont TNot   r n path
-    ('&':('&':r)) -> cont TAnd   r n path
-    ('|':('|':r)) -> cont TOr    r n path
-    ('-':('>':r)) -> cont TImply r n path
+    ('~':r) ->        cont TNot   r n path
+    ('/':('\\':r)) -> cont TAnd   r n path
+    ('\\':('/':r)) -> cont TOr    r n path
+    ('-':('>':r)) ->  cont TImply r n path
     ('<':('-':('>':r))) -> cont TIff r n path
     (c:r) | isAlpha c -> if isUpper c then lexIdent (c:r) else lexKeyword (c:r)
           | isSpace c -> modalLexer cont r n path
@@ -216,10 +229,11 @@ modalLexer cont s n path =
     lexIdent cs = case span isAlphaNum cs of
                     ("T",   r) -> cont TTop r n path
                     ("F",   r) -> cont TBottom r n path
+                    ("Logic", ('-':r)) -> let (ident, r') = span isAlphaNum r in cont (TLogic ident) r' n path
+                    ("Axiom", ('-':r)) -> let (ident, r') = span isAlphaNum r in cont (TAxiom ident) r' n path
                     (ident, r) -> cont (TIdent ident) r n path
     -- Los identificadores comienzan por un caracter alfabetico pero pueden luego contener caracteres numericos
     lexKeyword cs = case span isAlphaNum cs of
-                      --("use"  , r) -> cont TUse    r n path
                       ("set"  , r) -> cont TSet       r n path
                       ("def"  , r) -> cont TDef       r n path
                       ("and"  , r) -> cont TAnd       r n path
@@ -231,5 +245,6 @@ modalLexer cont s n path =
                       ("tag"  , r) -> cont TTag       r n path
                       ("isValid", r) -> cont TIsValid r n path
                       ("isSatis", r) -> cont TIsSatis r n path
+                      ("assume" , r) -> cont TAssume  r n path
                       (kw     , r) -> cont (TKeyword kw) r n path
 }

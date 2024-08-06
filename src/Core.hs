@@ -6,6 +6,7 @@ module Core
   ) where
 
 import Modal
+import Axioms (Logic)
 
 -- import PrettyPrinter
 import Common
@@ -25,6 +26,7 @@ data Stmt w a = Def a (Formula a)
 data Op w a = Valid (Formula a)
             | Satis (Formula a)
             | Sequent w (Formula a)
+            | Assume Logic
 
 {------- Show Instances -------}
 instance (Show w, Show a) => Show (Stmt w a) where
@@ -36,8 +38,8 @@ instance (Show w, Show a) => Show (Op w a) where
   show (Valid f) = "isValid " ++ show f
   show (Satis f) = "isSatisfiable " ++ show f
   show (Sequent w f) = show w ++ " ||- " ++ show f
+  show (Assume axs) = "assume " ++ show axs
 {------------------------------}
-
 type Env = (Model World Atom, DefTable Atom)
 
 type M a = StateT Env (Either String) a
@@ -74,3 +76,4 @@ eval op = runReader evalFun
       Valid f     -> Right <$> validInModel f
       Satis f     -> Right <$> satisfiableInModel f
       Sequent w f -> Left  <$> w ||- f
+      -- Assume l    -> 
