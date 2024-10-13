@@ -2,6 +2,10 @@
 module Modal
   ( Model (..)
   , TagMapping
+  , Trace (..)
+  , ModelTrace (..)
+  , EvalM
+  , emptyModel
   , toFormula
   , buildFrame
   , buildTag
@@ -29,12 +33,40 @@ TODO implementar instancia de Show para TagMapping. Para hacer esto deberia
 convertirlo a un newtype
 -}
 
+
+-- A Trace contains the result of evaluation of a formula and all of its subformulas
+data Trace = Trace
+                { getTraceHead   :: Formula Atom
+                , evalTrace   :: Bool
+                , getSubtrace :: Either [Trace] [(World, Trace)] -- Left is used for subformulas
+                                                                 -- while Right is for world changes
+                } deriving Show
+
+subforms :: [Trace] -> Either [Trace] [(World, Trace)]
+subforms = Left
+
+worldSteps :: [(World, Trace)] -> Either [Trace] [(World, Trace)]
+worldSteps = Right
+
 type EvalM a = Reader (Model World Atom) a
+
+-- A ModelTrace is like a Trace but for operations that are computed over all
+-- the worlds of a model. This way, this type contains the result of the operation
+-- and the trace of the formula for each world.
+data ModelTrace = ModelTrace
+                    { getFormula :: Formula Atom
+                    , evalModel :: Bool
+                    , getWorldTraces :: [(World, Trace)]
+                    } deriving Show
+
 
 data Model w a = Model
       { frame :: Graph w
       , tag   :: TagMapping w a
       } deriving Show
+
+emptyModel :: Model World Atom
+emptyModel = Model {frame = emptyFrame, tag = M.empty}
 
 toFormula :: Eq a => LitFormula a -> Formula a
 toFormula = toFormula' . sub []

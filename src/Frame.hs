@@ -2,6 +2,7 @@ module Frame
   ( Graph (vertices, edges)
   , graphFromEdges
   , neighbours
+  , emptyFrame
   , GraphProperty
   , isReflexive
   , isSymmetric
@@ -12,6 +13,7 @@ module Frame
   , isEuclidean
   ) where
 
+import Common (World)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Data.List (nub)
@@ -29,6 +31,8 @@ data Graph v = Graph
 {-
 TODO implementar instancia de Show para Graph
 -}
+emptyFrame :: Graph World
+emptyFrame = Graph {vertices = [], edges = M.empty}
 
 -- Crea un grafo dada una lista de tipo (x, [y1, .., yn]) donde en el grafo
 -- existe una arisa orientada x -> y1, .., x -> yn.

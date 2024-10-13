@@ -47,6 +47,8 @@ library
       array
     , base >=4.7 && <5
     , containers
+    , exceptions
+    , haskeline
     , mtl
     , prettyprinter >=1.7.1
     , transformers
@@ -70,6 +72,8 @@ executable MLL-exe
     , array
     , base >=4.7 && <5
     , containers
+    , exceptions
+    , haskeline
     , mtl
     , prettyprinter >=1.7.1
     , transformers
@@ -92,6 +96,8 @@ test-suite MLL-test
     , array
     , base >=4.7 && <5
     , containers
+    , exceptions
+    , haskeline
     , mtl
     , prettyprinter >=1.7.1
     , transformers

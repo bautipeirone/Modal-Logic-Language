@@ -2,11 +2,13 @@ module PrettyPrinter
   ( pp
   , ppTrace
   , ppModelTrace
+  , ppEval
   ) where
 
 -- import Core
 import Common
 import Prelude hiding ((<>))
+import Core (Trace (..), ModelTrace (..), AxiomsTrace (..), Eval (..))
 -- import Text.PrettyPrint.ANSI.Leijen
 -- import Text.PrettyPrint.HughesPJ
 import Prettyprinter
@@ -84,6 +86,17 @@ pp = pp'
 -- precedencia.
 
 {------------ Trace Pretty Printing ------------}
+ppEval :: Bool -> Eval -> FDoc
+ppEval False eval = ppBool $ case eval of
+                          F t -> evalTrace  t
+                          M t -> evalModel  t
+                          A t -> evalAxioms t
+ppEval True eval = case eval of
+                  F t -> ppTrace       t
+                  M t -> ppModelTrace  t
+                  A t -> ppAxiomsTrace t
+
+
 ppTrace :: Trace -> FDoc
 ppTrace t = let col = assignColors (atoms (getTraceHead t)) in ppTrace' col t
   where
@@ -91,16 +104,19 @@ ppTrace t = let col = assignColors (atoms (getTraceHead t)) in ppTrace' col t
     ppTrace' col t = let backtrace = case (getSubtrace t) of
                                        Left ts -> concatSubForms (ppTrace' col) ts
                                        Right wts -> concatWorldSteps (ppTrace' col) wts
-                         result = ppEval col (getTraceHead t) (evalTrace t)
+                         result = ppFormulaEval col (getTraceHead t) (evalTrace t)
                      in backtrace <> result
 
 ppModelTrace :: ModelTrace -> FDoc
 ppModelTrace mt = let backtrace = concatWorldSteps ppTrace (getWorldTraces mt)
-                      result = ppEval (assignColors $ atoms $ getFormula mt) (getFormula mt) (evalModel mt)
+                      result = ppFormulaEval (assignColors $ atoms $ getFormula mt) (getFormula mt) (evalModel mt)
                   in backtrace <> result
 
-ppEval :: Coloring Atom -> Formula Atom -> Bool -> FDoc
-ppEval col f b = hsep [ pp col f
+ppAxiomsTrace :: AxiomsTrace -> FDoc
+ppAxiomsTrace = undefined
+
+ppFormulaEval :: Coloring Atom -> Formula Atom -> Bool -> FDoc
+ppFormulaEval col f b = hsep [ pp col f
                       , colon
                       , space
                       , ppBool b
@@ -137,29 +153,29 @@ parensIf :: Bool -> FDoc -> FDoc
 parensIf True  = parens
 parensIf False = id
 
-isTop :: Formula a -> Bool
-isTop Top = True
-isTop _   = False
+-- isTop :: Formula a -> Bool
+-- isTop Top = True
+-- isTop _   = False
 
-isBottom :: Formula a -> Bool
-isBottom Bottom = True
-isBottom _      = False
+-- isBottom :: Formula a -> Bool
+-- isBottom Bottom = True
+-- isBottom _      = False
 
-isAtomic :: Formula a -> Bool
-isAtomic Atomic{} = True
-isAtomic _        = False
+-- isAtomic :: Formula a -> Bool
+-- isAtomic Atomic{} = True
+-- isAtomic _        = False
 
-isNot :: Formula a -> Bool
-isNot Not{} = True
-isNot _     = False
+-- isNot :: Formula a -> Bool
+-- isNot Not{} = True
+-- isNot _     = False
 
-isSquare :: Formula a -> Bool
-isSquare Square{} = True
-isSquare _        = False
+-- isSquare :: Formula a -> Bool
+-- isSquare Square{} = True
+-- isSquare _        = False
 
-isDiamond :: Formula a -> Bool
-isDiamond Diamond{} = True
-isDiamond _         = False
+-- isDiamond :: Formula a -> Bool
+-- isDiamond Diamond{} = True
+-- isDiamond _         = False
 
 isAnd :: Formula a -> Bool
 isAnd And{} = True
@@ -177,11 +193,11 @@ isIff :: Formula a -> Bool
 isIff Iff{} = True
 isIff _     = False
 
-isConstant :: Formula a -> Bool
-isConstant f = any ($ f) [isTop, isBottom, isAtomic]
+-- isConstant :: Formula a -> Bool
+-- isConstant f = any ($ f) [isTop, isBottom, isAtomic]
 
-isUnary :: Formula a -> Bool
-isUnary f = any ($ f) [isNot, isSquare, isDiamond]
+-- isUnary :: Formula a -> Bool
+-- isUnary f = any ($ f) [isNot, isSquare, isDiamond]
 
 isBinary :: Formula a -> Bool
 isBinary f = any ($ f) [isAnd, isOr, isImply, isIff]

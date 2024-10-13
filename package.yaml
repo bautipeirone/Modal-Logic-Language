@@ -28,7 +28,8 @@ dependencies:
 - prettyprinter >= 1.7.1
 - transformers
 - mtl
-
+- exceptions
+- haskeline
 
 default-extensions:
 - PatternSynonyms

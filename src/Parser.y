@@ -1,5 +1,11 @@
 {
-module Parser where
+module Parser
+  ( Parser
+  , parseFormula
+  , parseStmt
+  , parseFile
+  , parseLogic
+) where
 
 import Control.Monad
 import Control.Monad.Trans (lift)
@@ -23,7 +29,7 @@ import Axioms
 %error { parseError }
 %lexer { modalLexer } { TEOF }
 
-%monad { P } { thenP } { returnP }
+%monad { Parser } { thenP } { returnP }
 
 %token
   '='       { TEq }
@@ -171,24 +177,24 @@ data Token  = TKeyword String -- Built in function or atomic proposition identif
 type LineNumber = Int
 type Filename = String
 
-type P a = String -> LineNumber -> Filename -> Result a
+type Parser a = String -> LineNumber -> Filename -> Result a
 
 formatError :: LineNumber -> Filename -> String -> String
 formatError lineno file msg = foldr1 (++) ["[ERROR] ", file, (':':(show lineno)),
                               ". ", msg]
 
-parseError :: Token -> P a
+parseError :: Token -> Parser a
 parseError _ s lineno file = Left $ formatError lineno file "Error de parseo"
 
-returnP :: a -> P a
+returnP :: a -> Parser a
 returnP x s lineno file = Right x
 
-thenP :: P a -> (a -> P b) -> P b
+thenP :: Parser a -> (a -> Parser b) -> Parser b
 thenP p f = \s lineno file -> case p s lineno file of
                                 Left  b -> Left b
                                 Right a -> f a s lineno file
 
-modalLexer :: (Token -> P a) -> P a
+modalLexer :: (Token -> Parser a) -> Parser a
 modalLexer cont s n path =
   case s of
     [] -> cont TEOF [] n path

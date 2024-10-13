@@ -1,18 +1,31 @@
+{-# LANGUAGE TupleSections #-}
+
 module Axioms
   ( Logic
+  , AxiomsTrace (..)
   , identToLogic
   , listToLogic
+  , modelSatisfiesLogic
   )
 where
 
 import Common ( Formula (..), Atom, World )
 import qualified Frame as F
-import Modal ( Model (..))
+import Modal ( Model (..), EvalM )
+import Control.Monad.Reader (asks)
 
 data Axiom = Axiom { axiomName :: String
                    , axiomFormula :: Formula Atom
                    , graphProperty :: F.GraphProperty World
                    }
+
+
+data AxiomsTrace = AxiomsTrace
+                    { getAxioms :: [(Axiom, Bool)]
+                    , evalAxioms :: Bool
+                    -- , getLogic :: Logic
+                    }
+
 
 instance Show Axiom where
   show ax = let name = axiomName ax
@@ -86,20 +99,23 @@ identToLogic s = maybe (Left $ "Unknown logic name: " ++ s) Right (lookup s name
         where namedLogics = fmap (\l -> (fst l, l)) modalLogics
 
 listToLogic :: [String] -> Either String Logic
-listToLogic ss = either Left (\axs -> Right ("", axs)) (mapM (`findAxiom` namedAxioms) ss)
+listToLogic ss = fmap ("", ) (mapM (`findAxiom` namedAxioms) ss)
         where
           namedAxioms = fmap (\ax -> (axiomName ax, ax)) modalAxioms
           findAxiom ax axs = maybe (Left $ "Unknown axiom name: " ++ ax)
                                     Right (lookup ax axs)
-          
+
 
 frameSatisfiesAxiom :: F.Graph World -> Axiom -> Bool
 frameSatisfiesAxiom = flip graphProperty
 
-modelSatisfiesLogic :: Model World Atom -> Logic -> Bool
-modelSatisfiesLogic m l = all (frameSatisfiesAxiom f) axs
+modelSatisfiesLogic :: Logic -> EvalM AxiomsTrace
+modelSatisfiesLogic l = do m <- asks frame
+                           let bs = map (frameSatisfiesAxiom m) axs
+                               ns = zip axs bs
+                               b  = and bs
+                           return AxiomsTrace {getAxioms=ns, evalAxioms=b}
                       where
                         axs = getLogicAxioms l
-                        f = frame m
 
 

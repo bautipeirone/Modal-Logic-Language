@@ -9,14 +9,9 @@ module Common
   , Result
   , World
   , Atom
-  , Trace (..)
-  , ModelTrace (..)
-  , Eval
   , atoms
   , undefVarError
   , liftFormula
-  , subforms    -- Remove it
-  , worldSteps  -- Remove it
 ) where
 
 import Control.Monad
@@ -33,32 +28,6 @@ type DefTable a = [(a, Formula a)]
 
 type Lookup m a = ReaderT (DefTable a) (Either String) (m a)
 type Scheme a = Lookup LitFormula a
-
-
-subforms :: [Trace] -> Either [Trace] [(World, Trace)]
-subforms = Left
-
-worldSteps :: [(World, Trace)] -> Either [Trace] [(World, Trace)]
-worldSteps = Right
-
--- A Trace contains the result of evaluation of a formula and all of its subformulas
-data Trace = Trace  { getTraceHead   :: Formula Atom
-                    , evalTrace   :: Bool
-                    , getSubtrace :: Either [Trace] [(World, Trace)] -- Left is used for subformulas
-                                                                     -- while Right is for world changes
-                    } deriving Show
-
--- A ModelTrace is like a Trace but for operations that are computed over all
--- the worlds of a model. This way, this type contains the result of the operation
--- and the trace of the formula for each world.
-data ModelTrace = ModelTrace
-                    { getFormula :: Formula Atom
-                    , evalModel :: Bool
-                    , getWorldTraces :: [(World, Trace)]
-                    } deriving Show
-
--- Abstracts evaluation traces
-type Eval = Either Trace ModelTrace
 
 -- Only intended as an intermediate result of the parser. It is not used
 -- for evaluation.

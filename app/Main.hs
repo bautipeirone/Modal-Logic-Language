@@ -1,7 +1,5 @@
 module Main (main) where
 
-main :: IO ()
-main = print "holi"
 
 {- Core function to parse and convert a formula
 import Control.Monad.Trans.Writer
@@ -17,7 +15,6 @@ parseF env s = toFormula (fromRight (error "undef var") $ litFormula s)
 
 -}
 
-{-
 import           System.Console.Haskeline
 import qualified Control.Monad.Catch           as MC
 import           System.IO
@@ -30,14 +27,16 @@ import           Control.Monad.Except
 
 import           Data.List
 import           Data.Char
-import           Text.PrettyPrint.ANSI.Leijen   ( renderPretty
-                                                , displayS
-                                                )
 
 import           Common
 import           Core
 import           PrettyPrinter
 import           Parser
+
+import Control.Monad ( when, unless, foldM,  )
+import Control.Monad.Trans.Class ( lift )
+import Control.Monad.State (runState)
+import Control.Monad.Trans.Reader (ReaderT(runReaderT))
 ---------------------
 --- Interpreter
 ---------------------
@@ -48,7 +47,7 @@ main = runInputT defaultSettings main'
 main' :: InputT IO ()
 main' = do
   args <- lift getArgs
-  readevalprint args (S True "" [])
+  readevalprint args (S True False "" initialEnv)
 
 ioExceptionCatcher :: IOException -> IO (Maybe a)
 ioExceptionCatcher _ = return Nothing
@@ -58,16 +57,18 @@ iname = "Modal Logic Language"
 iprompt = "MLL> "
 
 data State = S
-  { inter :: Bool
-  ,       -- True, si estamos en modo interactivo.
-    lfile :: String
-  ,     -- Ultimo archivo cargado (para hacer "reload")
-    ve    :: NameEnv Value  -- Entorno con variables globales y su valor
+  { inter   :: Bool    -- True, si estamos en modo interactivo.
+  , verbose :: Bool    -- True si el interprete esta en modo verbose
+  , lfile   :: String  -- Ultimo archivo cargado (para hacer "reload")
+  , env     :: Env     -- Entorno con variables globales y su valor
   }
+
+initialEnv :: Env
+initialEnv = (emptyModel, [])
 
 --  read-eval-print loop
 readevalprint :: [String] -> State -> InputT IO ()
-readevalprint args state@(S inter lfile ve) =
+readevalprint args state@(S inter v lfile ve) =
   let rec st = do
         mx <- MC.catch
           (if inter then getInputLine iprompt else lift $ fmap Just getLine)
@@ -94,6 +95,7 @@ data Command = Compile CompileForm
              | Print String
              | Recompile
              | Browse
+             | ToggleVerbose
              | Quit
              | Help
              | Noop
@@ -126,22 +128,27 @@ interpretCommand x = lift $ if ":" `isPrefixOf` x
   else return (Compile (CompileInteractive x))
 
 handleCommand :: State -> Command -> InputT IO (Maybe State)
-handleCommand state@(S inter lfile ve) cmd = case cmd of
+handleCommand state@(S inter v lfile ve) cmd = case cmd of
   Quit   -> lift $ unless inter (putStrLn "!@#$^&*") >> return Nothing
   Noop   -> return (Just state)
   Help   -> lift $ putStr (helpTxt commands) >> return (Just state)
   Browse -> lift $ do
-    putStr (unlines $ reverse (nub (map ((\(Global s) -> s) . fst) ve)))
+    putStr (unlines $ reverse (nub (map fst (snd ve))))
     return (Just state)
   Compile c -> do
     state' <- case c of
       CompileInteractive s -> compilePhrase state s
       CompileFile        f -> compileFile (state { lfile = f }) f
     return (Just state')
-  Print s   -> printPhrase s >> return (Just state)
+  Print s   -> printPhrase state s >> return (Just state)
+  ToggleVerbose -> let v' = not v in printVerboseMode v' >> return (Just $ state { verbose = v' })
   Recompile -> if null lfile
     then lift $ putStrLn "No hay un archivo cargado.\n" >> return (Just state)
     else handleCommand state (Compile (CompileFile lfile))
+
+printVerboseMode :: Bool -> InputT IO ()
+printVerboseMode v  = let s = if v then "activado" else "desactivado"
+                      in lift $ putStrLn ("El modo verbose esta " ++ s) >> return ()
 
 data InteractiveCommand = Cmd [String] String (String -> Command) String
 
@@ -157,6 +164,7 @@ commands =
         "<file>"
         (const Recompile)
         "Volver a cargar el último archivo"
+  , Cmd [":verbose"] "" (const ToggleVerbose) "Activa y desactiva el modo verbose"
   , Cmd [":quit"]       "" (const Quit) "Salir del intérprete"
   , Cmd [":help", ":?"] "" (const Help) "Mostrar esta lista de comandos"
   ]
@@ -183,7 +191,7 @@ compileFiles xs s =
   foldM (\s x -> compileFile (s { lfile = x, inter = False }) x) s xs
 
 compileFile :: State -> String -> InputT IO State
-compileFile state@(S inter lfile v) f = do
+compileFile state@(S inter verbose lfile env) f = do
   lift $ putStrLn ("Abriendo " ++ f ++ "...")
   let f' = reverse (dropWhile isSpace (reverse f))
   x <- lift $ Control.Exception.catch
@@ -194,61 +202,48 @@ compileFile state@(S inter lfile v) f = do
               ("No se pudo abrir el archivo " ++ f' ++ ": " ++ err ++ "\n")
       return ""
     )
-  stmts <- parseIO f' (many parseTermStmt) x
-  maybe (return state) (foldM handleStmt state) stmts
+  ss <- parseIO f' (parseFile) x
+  lift $ case runReaderT ss (snd env) of
+    Left s -> putStrLn s >> return state
+    Right stmts -> maybe (return state) (foldM handleStmt state) stmts
 
 compilePhrase :: State -> String -> InputT IO State
 compilePhrase state x = do
-  x' <- parseIO "<interactive>" parseTermStmt x
-  maybe (return state) (handleStmt state) x'
+  x' <- parseIO "<interactive>" parseStmt x
+  case runReaderT x' (snd env) of
+    Left s -> putStrLn s >> return state
+    Right stmt -> maybe (return state) (handleStmt state) stmt
 
-printPhrase :: String -> InputT IO ()
-printPhrase x = do
-  x' <- parseIO "<interactive>" (parseStmt p) x
-  maybe (return ()) printStmt x'
- where
-  p :: Parser (LamTerm, Term)
-  p = do
-    a <- parseLamTerm
-    return (a, conversion a)
+printPhrase :: State -> String -> InputT IO ()
+printPhrase state x = do
+  x' <- parseIO "<interactive>" parseStmt x
+  case runReaderT x' (snd env) of
+    Left s -> putStrLn s >> return ()
+    Right stmt -> maybe (return ()) printStmt stmt
+--  where
+--   p :: Parser (Either String (Formula Atom))
+--   p = do
+--     sch <- parseFormula
+--     return (runReaderT sch (fst (env state)))
 
-printStmt :: Stmt (LamTerm, Term) -> InputT IO ()
-printStmt stmt = lift $ do
-  let outtext = case stmt of
-        Def x (_, e) -> "def " ++ x ++ " = " ++ render (printTerm e)
-        Eval (d, e) ->
-          "LamTerm AST:\n"
-            ++ show d
-            ++ "\n\nTerm AST:\n"
-            ++ show e
-            ++ "\n\nSe muestra como:\n"
-            ++ render (printTermUN e)
-            ++ "\n\nSe muestra con nombres arbitrarios como:\n"
-            ++ render (printTerm e)
-  putStrLn outtext
+
+printStmt :: Stmt World Atom -> InputT IO ()
+printStmt stmt = lift $ print stmt
 
 parseIO :: String -> Parser a -> String -> InputT IO (Maybe a)
-parseIO f p x = lift $ case parse (totParser p) f x of
+parseIO f p x = lift $ case p f 1 x of  -- TODO ¿Hace falta totParser?
   Left  e -> print e >> return Nothing
   Right r -> return (Just r)
 
-handleStmt :: State -> Stmt Term -> InputT IO State
+handleStmt :: State -> Stmt World Atom -> InputT IO State
 handleStmt state stmt = lift $ do
-  case stmt of
-    Def x e -> checkEval x e
-    Eval e  -> checkEval it e
- where
-  checkEval :: String -> Term -> IO State
-  checkEval i t = do
-    let v = eval (ve state) t
-    when (inter state) $ do
-      let outtext = if i == it then render (printTermUN $ quote v) else i
-      putStrLn outtext
-    return (state { ve = (Global i, v) : ve state })
+  (res,env') <- runState (runCmd stmt) (env state)
+  let output = maybe "" (show $ ppEval (verbose state)) res
+  when (inter state) $ putStrLn output
+  return $ state { env = env' }
 
 prelude :: String
 prelude = "examples/Prelude.mll"
 
 it :: String
 it = "it"
--}

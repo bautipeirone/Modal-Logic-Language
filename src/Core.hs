@@ -2,16 +2,19 @@ module Core
   ( Stmt (..)
   , SetStmt (..)
   , Op (..)
+  , Eval (..)
   , runCmd
+  , Env
+  , module Modal
+  , module Axioms
   ) where
-
-import Modal
-import Axioms (Logic)
 
 -- import PrettyPrinter
 import Common
 import Frame
-import Control.Monad (liftM)
+import Modal
+import Axioms
+
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Reader
 
@@ -28,6 +31,15 @@ data Op w a = Valid (Formula a)
             | Sequent w (Formula a)
             | Assume Logic
 
+
+-- class Trace a where
+--   getTraceHead :: a w -> w
+--   eval :: a -> Bool
+--   getSubtraces :: Foldable t => a w -> t (a w)
+
+-- Abstracts evaluation traces
+data Eval = F Trace | M ModelTrace | A AxiomsTrace
+
 {------- Show Instances -------}
 instance (Show w, Show a) => Show (Stmt w a) where
   show (Def s f)  = "def "  ++ show s ++ " = " ++ show f
@@ -42,7 +54,7 @@ instance (Show w, Show a) => Show (Op w a) where
 {------------------------------}
 type Env = (Model World Atom, DefTable Atom)
 
-type M a = StateT Env (Either String) a
+type M a = State Env a
 
 getModel :: M (Model World Atom)
 getModel = gets fst
@@ -73,7 +85,7 @@ eval :: Op World Atom -> Model World Atom -> Eval
 eval op = runReader evalFun
   where
     evalFun = case op of
-      Valid f     -> Right <$> validInModel f
-      Satis f     -> Right <$> satisfiableInModel f
-      Sequent w f -> Left  <$> w ||- f
-      -- Assume l    -> 
+      Valid f     -> M <$> validInModel f
+      Satis f     -> M <$> satisfiableInModel f
+      Sequent w f -> F <$> w ||- f
+      Assume l    -> A <$> modelSatisfiesLogic l
