@@ -1,7 +1,8 @@
 {-# LANGUAGE TupleSections #-}
 
 module Axioms
-  ( Logic
+  ( SLogic (..)
+  , Logic
   , AxiomsTrace (..)
   , identToLogic
   , listToLogic
@@ -32,6 +33,7 @@ instance Show Axiom where
                 formula = axiomFormula ax
                 in name ++ " <=> " ++ show formula
 
+data SLogic = LogicIdent String | AxiomsList [String]
 type Logic = (String, [Axiom])
 
 getLogicName :: Logic -> String

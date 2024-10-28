@@ -30,10 +30,12 @@ library
       Axioms
       Common
       Core
+      Elab
       Frame
       Modal
       Parser
       PrettyPrinter
+      State
   other-modules:
       Paths_MLL
   autogen-modules:

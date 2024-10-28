@@ -10,9 +10,9 @@ set frame = {              -- Indica relacion de transicion entre mundos
 } -- Los vertices se derivan de forma automatica, x1 ... x6
 
 set tag = {                  -- Indica asosiacion de valores de verdad de
-  x1 -> {}                   -- formulas atomicas segun el mundo
-  x2 -> {}
-  x3 -> {p}
+  x1 -> {},                  -- formulas atomicas segun el mundo
+  x2 -> {},
+  x3 -> {p},
   x4 -> {p,q}
 }
 
@@ -23,12 +23,13 @@ def Phi = p <-> q  -- Formulas y/o esquemas. Las formulas pueden ser evaluadas
 
 isValid Phi[r and s/p]     -- Reemplazo sintactico, equivalente a "r and s <-> q"
 
-r and q  -- Dos tipos de escritura de proposiciones posible
-r /\  q  -- Estilo clasico ( /\ , \/ , ~) o estilo literal (and, or, not)
-r and q /\ t -- Esto es posible, pero no recomendado
+-- TODO poner estados por defecto
+-- r and q  -- Dos tipos de escritura de proposiciones posible
+-- r /\  q  -- Estilo clasico ( /\ , \/ , ~) o estilo literal (and, or, not)
+-- r and q /\ t -- Esto es posible, pero no recomendado
 
 assume Logic-T  -- Verifica si la logica modal T vale sobre el modelo definido
-assume {Ax-K, Ax-T} -- Tambien puede escribirse de esta manera, como un conjunto de axiomas
+assume {Axiom-K, Axiom-T} -- Tambien puede escribirse de esta manera, como un conjunto de axiomas
 -- Las logicas y axiomas disponibles son built-in del lenguaje y no se pueden
 -- agregar nuevos ya que la verificacion de axiomas requiere verificar propiedades
 -- especiales sobre el grafo del modelo.

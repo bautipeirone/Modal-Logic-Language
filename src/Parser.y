@@ -98,43 +98,43 @@ Map :: { [(String, [String])] }
 Map : '{' collection(ElementMapping, ',') '}' { $2 }
 
 -- ######## GRAMMAR PARSERS ########
-File    :: { [Lookup (Stmt World) Atom] }
+File    :: { [SStmt] }
 File    : Stmt File { $1 : $2 }
         |           { [] }
 
-Stmt  :: { Lookup (Stmt World) Atom }
-Stmt  : def ident '=' FExp { liftM ((Def $2) . toFormula) $4 }
-      | Exp                { liftM Expr $1 }
-      | SetStmt            { return $ Set $1 }
+Stmt  :: { SStmt }
+Stmt  : def ident '=' FExp { Def $2 $4 }
+      | Exp                { Expr $1 }
+      | SetStmt            { Set $1 }
 
-SetStmt :: { SetStmt World Atom }
+SetStmt :: { SetStmt }
 SetStmt : set frame  '=' Map { Frame (buildFrame $4) }
         | set tag    '=' Map { Tag   (buildTag   $4) }
 
-Exp :: { Lookup (Op World) Atom }
-Exp : isValid FExp       { liftM (Valid . toFormula) $2 }
-    | isSatis FExp       { liftM (Satis . toFormula) $2 }
-    | assume Logic       { lift (fmap Assume $2) }
-    | keyword '||-' FExp { liftM (Sequent $1 . toFormula) $3 }
+Exp :: { SOp }
+Exp : isValid FExp       { Valid $2 }
+    | isSatis FExp       { Satis $2 }
+    | assume Logic       { Assume $2 }
+    | keyword '||-' FExp { Sequent $1 $3 }
 
 FExp  :: { Scheme Atom }
-FExp  : FExp and FExp   { liftM2 LAnd $1 $3 }
-      | FExp or  FExp   { liftM2 LOr  $1 $3 }
-      | FExp '->'  FExp { liftM2 LImply $1 $3}
-      | FExp '<->' FExp { liftM2 LIff $1 $3 }
-      | not FExp        { liftM  LNot $2 }
-      | square FExp     { liftM  LSquare $2 }
-      | diamond FExp    { liftM  LDiamond $2 }
-      | bottom          { return LBottom }
-      | top             { return LTop }
-      | keyword         { return (LAtomic $1) }
-      | ident           { ask >>= maybe (undefVarError $1) liftFormula . lookup $1 }
-      | FExp '[' FExp '/' keyword ']' { liftM2 (\x y -> LSub x y $5) $1 $3 }
+FExp  : FExp and FExp   { LAnd $1 $3 }
+      | FExp or  FExp   { LOr  $1 $3 }
+      | FExp '->'  FExp { LImply $1 $3}
+      | FExp '<->' FExp { LIff $1 $3 }
+      | not FExp        { LNot $2 }
+      | square FExp     { LSquare $2 }
+      | diamond FExp    { LDiamond $2 }
+      | bottom          { LBottom }
+      | top             { LTop }
+      | keyword         { LAtomic $1 }
+      | ident           { LIdent $1 }
+      | FExp '[' FExp '/' keyword ']' { LSub $1 $3 $5 }
       | '(' FExp ')'    { $2 }
 
-Logic   :: { Either String Logic }
-        : logic         { identToLogic $1 }
-        | Set(axiom)    { listToLogic $1 }
+Logic   :: { SLogic }
+        : logic         { LogicIdent $1 }
+        | Set(axiom)    { AxiomsList $1 }
 
 {
 data Token  = TKeyword String -- Built in function or atomic proposition identifier
@@ -174,13 +174,15 @@ data Token  = TKeyword String -- Built in function or atomic proposition identif
             | TEOF
             deriving Show
 
+type Result = Either String
+
 type LineNumber = Int
 type Filename = String
 
 type Parser a = String -> LineNumber -> Filename -> Result a
 
 formatError :: LineNumber -> Filename -> String -> String
-formatError lineno file msg = foldr1 (++) ["[ERROR] ", file, (':':(show lineno)),
+formatError lineno file msg = foldr1 (++) [file, (':':(show lineno)),
                               ". ", msg]
 
 parseError :: Token -> Parser a
