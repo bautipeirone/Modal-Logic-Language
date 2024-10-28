@@ -18,8 +18,8 @@ elab = elab' []
     elab' :: DefTable Atom -> DefTable Atom -> Scheme Atom -> Either String (Formula Atom)
     elab' env def LBottom        = return Bottom
     elab' env def LTop           = return Top
-    elab' env def (LAtomic x)    = Right $ fromMaybe (Atomic x) (lookup x env)
-    elab' env def (LIdent v)     = maybe (undefVarError v) Right (lookup v def)
+    elab' env def (LAtomic x)    = return $ sub env (Atomic x)
+    elab' env def (LIdent v)     = maybe (undefVarError v) (return . sub env) (lookup v def)
     elab' env def (LAnd s1 s2)   = do f1 <- elab' env def s1
                                       f2 <- elab' env def s2
                                       return $ And f1 f2
@@ -40,6 +40,17 @@ elab = elab' []
                                       return $ Diamond f
     elab' env def (LSub s1 s2 x) = do f2 <- elab' env def s2
                                       elab' ((x,f2):env) def s1
+    sub :: DefTable Atom -> Formula Atom -> Formula Atom
+    sub env p@(Atomic x)   = fromMaybe p (lookup x env)
+    sub env Top            = Top
+    sub env Bottom         = Bottom
+    sub env (Not      f )  = Not (sub env f)
+    sub env (Square   f )  = Square (sub env f)
+    sub env (Diamond  f )  = Diamond (sub env f)
+    sub env (And   f1 f2)  = And (sub env f1) (sub env f2)
+    sub env (Or    f1 f2)  = Or    (sub env f1) (sub env f2)
+    sub env (Imply f1 f2)  = Imply (sub env f1) (sub env f2)
+    sub env (Iff   f1 f2)  = Iff   (sub env f1) (sub env f2)
 
 elabLogic :: SLogic -> Either String Logic
 elabLogic (LogicIdent id ) = identToLogic id
