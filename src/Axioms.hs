@@ -4,6 +4,7 @@ module Axioms
   ( SLogic (..)
   , Logic
   , AxiomsTrace (..)
+  , Axiom (..)
   , identToLogic
   , listToLogic
   , modelSatisfiesLogic

@@ -7,10 +7,10 @@ module PrettyPrinter
 
 -- import Core
 import Common
-import Prelude hiding ((<>))
 import Core (Trace (..), ModelTrace (..), AxiomsTrace (..), Eval (..))
--- import Text.PrettyPrint.ANSI.Leijen
--- import Text.PrettyPrint.HughesPJ
+import Axioms
+
+import Prelude hiding ((<>))
 import Prettyprinter
 import Data.Maybe (fromMaybe)
 import Data.Bifunctor
@@ -113,7 +113,21 @@ ppModelTrace mt = let backtrace = concatWorldSteps ppTrace (getWorldTraces mt)
                   in backtrace <> result
 
 ppAxiomsTrace :: AxiomsTrace -> FDoc
-ppAxiomsTrace = undefined
+ppAxiomsTrace at = vsep $ map (ppAxiomsCheck width) (getAxioms at)
+        where
+          width = maximum $ map (length . axiomName . fst) (getAxioms at)
+          padWordLeft :: Int -> String -> String
+          padWordLeft w s = let l = length s
+                                pad = replicate (w - l) ' '
+                            in  pad ++ s
+          ppCheck :: Bool -> FDoc
+          ppCheck  True = green $ pretty "✓"
+          ppCheck False = red   $ pretty "✗"
+          ppAxiomsCheck :: Int -> (Axiom, Bool) -> FDoc
+          ppAxiomsCheck w (ax,b) = hsep [ pretty $ padWordLeft w (axiomName ax)
+                                        , space
+                                        , ppCheck b
+                                        ]
 
 ppFormulaEval :: Coloring Atom -> Formula Atom -> Bool -> FDoc
 ppFormulaEval col f b = hsep [ pp col f

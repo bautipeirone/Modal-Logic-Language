@@ -80,6 +80,7 @@ data Command = Compile CompileForm
              | Recompile
              | Browse
              | ToggleVerbose
+             | ModalLibrary
              | Quit
              | Help
              | Noop
@@ -129,6 +130,7 @@ handleCommand cmd = do
                         printVerboseMode (not v)
                         setVerbose (not v)
                         return True
+    ModalLibrary -> liftIO $ putStr (modalLibrary) >> return True
     Recompile -> do
         lfile <- getLastFile
         if null lfile
@@ -142,13 +144,15 @@ printVerboseMode v  = let s = if v then "activado" else "desactivado"
 data InteractiveCommand = Cmd [String] String (String -> Command) String
 
 commands :: [InteractiveCommand]
-commands =
+commands = -- TODO agregar uno que muestre las logicas y axiomas disponibles
   [ Cmd [":browse"] "" (const Browse) "Ver los nombres en scope"
   , Cmd [":load"]
         "<file>"
         (Compile . CompileFile)
         "Cargar un programa desde un archivo"
   , Cmd [":print"] "<exp>" Print "Imprime un término y sus ASTs sin evaluarlo"
+  , Cmd [":axioms"] "" (const ModalLibrary)
+        "Muestra la libreria de logicas y axiomas modales disponibles"
   , Cmd [":reload"]
         "<file>"
         (const Recompile)
@@ -174,6 +178,9 @@ helpTxt cs =
            )
            cs
          )
+
+modalLibrary :: String
+modalLibrary = ""
 
 compileFiles :: [String] -> RT ()
 compileFiles = mapM_ compileFile
