@@ -18,7 +18,7 @@ import           Parser
 import           Elab
 import           State
 
-import Control.Monad ( when, unless, foldM,  )
+import Control.Monad ( when, unless, foldM, (>=>) )
 import Control.Monad.Trans
 import qualified Control.Monad.Error.Class    as C
 import qualified Control.Monad.Trans.State    as S
@@ -130,7 +130,7 @@ handleCommand cmd = do
                         printVerboseMode (not v)
                         setVerbose (not v)
                         return True
-    ModalLibrary -> liftIO $ putStr (modalLibrary) >> return True
+    ModalLibrary -> liftIO $ putStr modalLibrary >> return True
     Recompile -> do
         lfile <- getLastFile
         if null lfile
@@ -144,7 +144,7 @@ printVerboseMode v  = let s = if v then "activado" else "desactivado"
 data InteractiveCommand = Cmd [String] String (String -> Command) String
 
 commands :: [InteractiveCommand]
-commands = -- TODO agregar uno que muestre las logicas y axiomas disponibles
+commands =
   [ Cmd [":browse"] "" (const Browse) "Ver los nombres en scope"
   , Cmd [":load"]
         "<file>"
@@ -179,7 +179,7 @@ helpTxt cs =
            cs
          )
 
-modalLibrary :: String
+modalLibrary :: String -- TODO escribir mensaje
 modalLibrary = ""
 
 compileFiles :: [String] -> RT ()
@@ -187,6 +187,7 @@ compileFiles = mapM_ compileFile
 
 compileFile :: String -> RT ()
 compileFile f = do
+  inter <- getInter
   setInter False
   setLastFile f
   liftIO $ putStrLn ("Abriendo " ++ f ++ "...")
@@ -199,27 +200,21 @@ compileFile f = do
               ("No se pudo abrir el archivo " ++ f' ++ ": " ++ err ++ "\n")
       return ""
     )
-  sstmts <- parseIO f' (parseFile) x
-  env <- getEnv
-  stmts <- mapM (elabStmt (snd env)) sstmts -- TODO Corregir. No se puede elaborar todo primero y luego evaluar
-  handleStmts stmts
+  sstmts <- parseIO f' parseFile x
+  mapM_ (elabStmt >=> handleStmt) sstmts
+  setInter inter
 
 compilePhrase :: String -> RT ()
 compilePhrase x = do
   sstmt <- parseIO "<interactive>" parseStmt x
-  env <- getEnv
-  stmt  <- elabStmt (snd env) sstmt
+  stmt  <- elabStmt sstmt
   handleStmt stmt
 
-printPhrase :: String -> RT () -- TODO Cambiar statements por formulas
+printPhrase :: String -> RT ()
 printPhrase x = do
-  sstmt <- parseIO "<interactive>" parseStmt x
-  env <- getEnv
-  stmt <- elabStmt (snd env) sstmt
-  printStmt stmt
-
-printStmt :: Stmt -> RT ()
-printStmt stmt = liftIO $ print stmt
+  scheme <- parseIO "<interactive>" parseFormula x
+  f <- elab scheme
+  liftIO . print $ ppFormula f
 
 parseIO :: String -> Parser a -> String -> RT a
 parseIO f p x = case p x 1 f of

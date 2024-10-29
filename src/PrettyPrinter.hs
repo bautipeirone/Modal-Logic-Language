@@ -1,11 +1,10 @@
 module PrettyPrinter
-  ( pp
+  ( ppFormula
   , ppTrace
   , ppModelTrace
   , ppEval
   ) where
 
--- import Core
 import Common
 import Core (Trace (..), ModelTrace (..), AxiomsTrace (..), Eval (..))
 import Axioms

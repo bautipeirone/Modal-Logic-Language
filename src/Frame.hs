@@ -101,5 +101,3 @@ isLinear g = all vertexIsLinear (vertices g)
           let n = neighbours g x
               c = cartesian n n
           in all (\(y,z) -> y == z || existsEdge g (y,z) || existsEdge g (z,y)) c
-
--- type Logic v = [GraphProperty v]
