@@ -27,11 +27,6 @@ import Data.Maybe (fromMaybe)
 import Frame
 
 type TagMapping w a = M.Map w (S.Set a)
-{-
-TODO implementar instancia de Show para TagMapping. Para hacer esto deberia
-convertirlo a un newtype
--}
-
 
 -- A Trace contains the result of evaluation of a formula and all of its subformulas
 data Trace = Trace

@@ -217,9 +217,9 @@ modalLexer cont s n path =
     ('[':r) -> cont TOpenSqBrackets  r n path
     (']':r) -> cont TCloseSqBrackets r n path
     ('~':r) ->        cont TNot   r n path
-    ('/':('\\':r)) -> cont TAnd   r n path
-    ('\\':('/':r)) -> cont TOr    r n path
-    ('-':('>':r)) ->  cont TImply r n path
+    ('&':('&':r))  -> cont TAnd   r n path
+    ('|':('|':r))  -> cont TOr    r n path
+    ('-':('>':r))  -> cont TImply r n path
     ('<':('-':('>':r))) -> cont TIff r n path
     (c:r) | isAlpha c -> if isUpper c then lexIdent (c:r) else lexKeyword (c:r)
           | isSpace c -> modalLexer cont r n path

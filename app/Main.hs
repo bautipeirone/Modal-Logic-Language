@@ -17,6 +17,7 @@ import           PrettyPrinter
 import           Parser
 import           Elab
 import           State
+import           Axioms
 
 import Control.Monad ( when, unless, foldM, (>=>) )
 import Control.Monad.Trans
@@ -81,6 +82,7 @@ data Command = Compile CompileForm
              | Browse
              | ToggleVerbose
              | ModalLibrary
+             | PrintFrame
              | Quit
              | Help
              | Noop
@@ -126,6 +128,7 @@ handleCommand cmd = do
         CompileFile        f -> compileFile f
       return True
     Print s   -> printPhrase s >> return True
+    PrintFrame -> printModel >> return True
     ToggleVerbose -> do v <- getVerbose
                         printVerboseMode (not v)
                         setVerbose (not v)
@@ -150,9 +153,11 @@ commands =
         "<file>"
         (Compile . CompileFile)
         "Cargar un programa desde un archivo"
-  , Cmd [":print"] "<exp>" Print "Imprime un término y sus ASTs sin evaluarlo"
-  , Cmd [":axioms"] "" (const ModalLibrary)
+  , Cmd [":print"] "<exp>" Print "Imprime una formula luego de ser elaborada"
+  , Cmd [":modal"] "" (const ModalLibrary)
         "Muestra la libreria de logicas y axiomas modales disponibles"
+  , Cmd [":frame"] "" (const PrintFrame)
+        "Imprime el frame activo en el momento"
   , Cmd [":reload"]
         "<file>"
         (const Recompile)
@@ -180,7 +185,12 @@ helpTxt cs =
          )
 
 modalLibrary :: String -- TODO escribir mensaje
-modalLibrary = ""
+modalLibrary = show ppModalHelp
+
+printModel :: RT ()
+printModel = do model <- fst <$> getEnv
+                let out = show $ ppFrame model
+                liftIO $ putStrLn out
 
 compileFiles :: [String] -> RT ()
 compileFiles = mapM_ compileFile

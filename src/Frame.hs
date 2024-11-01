@@ -27,9 +27,6 @@ data Graph v = Graph
       , edges    :: M.Map v [v]
       } deriving Show
 
-{-
-TODO implementar instancia de Show para Graph
--}
 emptyFrame :: Graph w
 emptyFrame = Graph {vertices = [], edges = M.empty}
 

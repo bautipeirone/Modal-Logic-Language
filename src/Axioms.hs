@@ -2,12 +2,14 @@
 
 module Axioms
   ( SLogic (..)
-  , Logic
+  , Logic (..)
   , AxiomsTrace (..)
   , Axiom (..)
   , identToLogic
   , listToLogic
   , modelSatisfiesLogic
+  , modalAxioms
+  , modalLogics
   )
 where
 
@@ -29,19 +31,12 @@ data AxiomsTrace = AxiomsTrace
                     }
 
 
-instance Show Axiom where
-  show ax = let name = axiomName ax
-                formula = axiomFormula ax
-                in name ++ " <=> " ++ show formula
-
 data SLogic = LogicIdent String | AxiomsList [String]
-type Logic = (String, [Axiom])
 
-getLogicName :: Logic -> String
-getLogicName = fst
-
-getLogicAxioms :: Logic -> [Axiom]
-getLogicAxioms = snd
+data Logic = Logic { logicName :: String
+                   , logicDescription :: String
+                   , logicAxioms :: [Axiom]
+                   }
 
 axK, axT, axB, axD, ax4, ax5 :: Axiom
 axK = Axiom "K"
@@ -90,20 +85,22 @@ modalAxioms = [ axK, axT, axB, axD, ax4, ax5, axE, axC ]
 
 -- Standard modal logics supported
 modalLogics :: [Logic]
-modalLogics = [ ("K" , [ axK ])
-              , ("T" , [ axK , axT ])
-              , ("S4", [ axK , axT , ax4 ])
-              , ("S5", [ axK , axT , ax5 ])
-              , ("D" , [ axK , axD ])
+modalLogics = [ Logic "K"  "TODO"   [ axK ]
+              , Logic "T"  "cambiar esto" [ axK , axT ]
+              , Logic "S4" "agregar descripciones" [ axK , axT , ax4 ]
+              , Logic "S5" "                 " [ axK , axT , ax5 ]
+              , Logic "D"  ""                  [ axK , axD ]
               ]
 
 identToLogic :: String -> Either String Logic
 identToLogic s = maybe (Left $ "Unknown logic name: " ++ s) Right (lookup s namedLogics)
-        where namedLogics = fmap (\l -> (fst l, l)) modalLogics
+        where namedLogics = fmap (\l -> (logicName l, l)) modalLogics
 
 listToLogic :: [String] -> Either String Logic
-listToLogic ss = fmap ("", ) (mapM (`findAxiom` namedAxioms) ss)
+listToLogic ss = newUnnamedLogic <$> (mapM (`findAxiom` namedAxioms) ss)
         where
+          newUnnamedLogic :: [Axiom] -> Logic
+          newUnnamedLogic = Logic "Unnamed Logic" "Custom Logic instantiated via axioms list"
           namedAxioms = fmap (\ax -> (axiomName ax, ax)) modalAxioms
           findAxiom ax axs = maybe (Left $ "Unknown axiom name: " ++ ax)
                                     Right (lookup ax axs)
@@ -119,6 +116,6 @@ modelSatisfiesLogic l = do m <- asks frame
                                b  = and bs
                            return AxiomsTrace {getAxioms=ns, evalAxioms=b}
                       where
-                        axs = getLogicAxioms l
+                        axs = logicAxioms l
 
 

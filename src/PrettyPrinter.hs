@@ -3,26 +3,35 @@ module PrettyPrinter
   , ppTrace
   , ppModelTrace
   , ppEval
+  , ppModalHelp
+  , ppFrame
   ) where
 
 import Common
 import Core (Trace (..), ModelTrace (..), AxiomsTrace (..), Eval (..))
 import Axioms
+import Modal
+import Frame
 
 import Prelude hiding ((<>))
 import Prettyprinter
 import Data.Maybe (fromMaybe)
 import Data.Bifunctor
+import Data.Map (assocs)
+import Data.Set (elems)
 
-type FPrinter = Formula Atom -> FDoc
+type Color = Doc () -> Doc ()
+type Coloring a = [(a, Color)]
 
+{---------------- Utilidades -----------------}
 -- Translation of formula to LaTeX
 toLatex :: Formula a -> String
 toLatex = undefined
 
-type FDoc = Doc ()
-type Color = FDoc -> FDoc
-type Coloring a = [(a, Color)]
+padWordLeft :: Int -> String -> String
+padWordLeft w s = let l = length s
+                      pad = replicate (w - l) ' '
+                  in  pad ++ s
 
 resetColor :: Color
 resetColor = (<> pretty "\ESC[0m")
@@ -46,11 +55,12 @@ defaultColors = cycle colors
 
 assignColors :: [a] -> Coloring a
 assignColors = flip zip defaultColors
+{-------------------------------------------- -}
 
-ppFormula :: FPrinter
+ppFormula :: Formula Atom -> Doc ()
 ppFormula f = let col = assignColors (atoms f) in pp col f
 
-pp :: Coloring Atom -> FPrinter
+pp :: Coloring Atom -> Formula Atom -> Doc ()
 pp = pp'
   where
     pp' col  Bottom         = red   $ pretty "F" -- ⊥
@@ -85,7 +95,7 @@ pp = pp'
 -- precedencia.
 
 {------------ Trace Pretty Printing ------------}
-ppEval :: Bool -> Eval -> FDoc
+ppEval :: Bool -> Eval -> Doc ()
 ppEval False eval = ppBool $ case eval of
                           F t -> evalTrace  t
                           M t -> evalModel  t
@@ -96,65 +106,90 @@ ppEval True eval = case eval of
                   A t -> ppAxiomsTrace t
 
 
-ppTrace :: Trace -> FDoc
+ppTrace :: Trace -> Doc ()
 ppTrace t = let col = assignColors (atoms (getTraceHead t)) in ppTrace' col t
   where
-    ppTrace' :: Coloring Atom -> Trace -> FDoc
-    ppTrace' col t = let backtrace = case (getSubtrace t) of
+    ppTrace' :: Coloring Atom -> Trace -> Doc ()
+    ppTrace' col t = let backtrace = case getSubtrace t of
                                        Left ts -> concatSubForms (ppTrace' col) ts
                                        Right wts -> concatWorldSteps (ppTrace' col) wts
                          result = ppFormulaEval col (getTraceHead t) (evalTrace t)
                      in backtrace <> result
 
-ppModelTrace :: ModelTrace -> FDoc
+ppModalHelp :: Doc ()
+ppModalHelp = vsep [ pretty "Los axiomas son: "
+                   , vsep (map ppAxiomMsg modalAxioms) <> line
+                   , pretty "Las logicas disponibles son: "
+                   , vsep (map ppLogicMsg modalLogics) <> line
+                   ]
+  where
+    ppAxiomMsg :: Axiom -> Doc ()
+    ppAxiomMsg ax = pretty (padWordLeft 4 (axiomName ax))
+                 <> pretty " <=> "
+                 <> ppFormula (axiomFormula ax)
+
+    ppLogicMsg :: Logic -> Doc ()
+    ppLogicMsg lg = pretty (padWordLeft 4 (logicName lg))
+                 <> pretty "  =  "
+                 <> pretty (map axiomName (logicAxioms lg))
+                 <> line
+                 <> pretty (logicDescription lg)
+
+ppFrame :: Model World Atom -> Doc ()
+ppFrame m = vsep [ pretty "Grafo de transiciones"
+                 , ppGraph (frame m) <> line
+                 , pretty "Etiquetado de estados"
+                 , ppTag (tag m) <> line
+                 ]
+    where
+      ppGraph g = vsep $ map (\(v,ns) -> pretty v <> pretty " -> " <> encloseSep lbrace rbrace comma (map pretty ns)) (assocs (edges g))
+      ppTag t = vsep $ map (\(v,as) -> pretty v <> pretty " -> " <> encloseSep lbrace rbrace comma (map pretty (elems as))) (assocs t)
+
+ppModelTrace :: ModelTrace -> Doc ()
 ppModelTrace mt = let backtrace = concatWorldSteps ppTrace (getWorldTraces mt)
                       result = ppFormulaEval (assignColors $ atoms $ getFormula mt) (getFormula mt) (evalModel mt)
                   in backtrace <> result
 
-ppAxiomsTrace :: AxiomsTrace -> FDoc
+ppAxiomsTrace :: AxiomsTrace -> Doc ()
 ppAxiomsTrace at = vsep $ map (ppAxiomsCheck width) (getAxioms at)
         where
           width = maximum $ map (length . axiomName . fst) (getAxioms at)
-          padWordLeft :: Int -> String -> String
-          padWordLeft w s = let l = length s
-                                pad = replicate (w - l) ' '
-                            in  pad ++ s
-          ppCheck :: Bool -> FDoc
+          ppCheck :: Bool -> Doc ()
           ppCheck  True = green $ pretty "✓"
           ppCheck False = red   $ pretty "✗"
-          ppAxiomsCheck :: Int -> (Axiom, Bool) -> FDoc
+          ppAxiomsCheck :: Int -> (Axiom, Bool) -> Doc ()
           ppAxiomsCheck w (ax,b) = hsep [ pretty $ padWordLeft w (axiomName ax)
                                         , space
                                         , ppCheck b
                                         ]
 
-ppFormulaEval :: Coloring Atom -> Formula Atom -> Bool -> FDoc
+ppFormulaEval :: Coloring Atom -> Formula Atom -> Bool -> Doc ()
 ppFormulaEval col f b = hsep [ pp col f
                       , colon
                       , space
                       , ppBool b
                       ]
 
-ppBool :: Bool -> FDoc
+ppBool :: Bool -> Doc ()
 ppBool True  = green $ pretty True
 ppBool False = red   $ pretty False
 
-concatSubForms :: (Trace -> FDoc) -> [Trace] -> FDoc
+concatSubForms :: (Trace -> Doc ()) -> [Trace] -> Doc ()
 concatSubForms printer ts = let docs = fmap printer ts
                                 backtrace = if null docs then emptyDoc
-                                                         else (indent 2 (vsep docs)) <> line
+                                                         else indent 2 (vsep docs) <> line
                             in backtrace
 
-lineSep:: FDoc
+lineSep:: Doc ()
 lineSep = pretty "--------------------------"
 
-encloseSubtrace :: (World, FDoc) -> FDoc
+encloseSubtrace :: (World, Doc ()) -> Doc ()
 encloseSubtrace (w, doc) = vsep [ (pretty w) <> colon
                                 , doc
                                 , lineSep
                                 ]
 
-concatWorldSteps :: (Trace -> FDoc) -> [(World, Trace)] -> FDoc
+concatWorldSteps :: (Trace -> Doc ()) -> [(World, Trace)] -> Doc ()
 concatWorldSteps printer wts = let docs = fmap (second ((indent 2) . printer)) wts
                                    docs' = fmap encloseSubtrace docs
                                    backtrace = if null docs then emptyDoc
@@ -162,7 +197,7 @@ concatWorldSteps printer wts = let docs = fmap (second ((indent 2) . printer)) w
                                in backtrace
 
 {------------------ Utilities ------------------}
-parensIf :: Bool -> FDoc -> FDoc
+parensIf :: Bool -> Doc () -> Doc ()
 parensIf True  = parens
 parensIf False = id
 
