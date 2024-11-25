@@ -63,20 +63,20 @@ ppFormula f = let col = assignColors (atoms f) in pp col f
 pp :: Coloring Atom -> Formula Atom -> Doc ()
 pp = pp'
   where
-    pp' col  Bottom         = red   $ pretty "F" -- ⊥
-    pp' col  Top            = green $ pretty "T" -- ⊤
+    pp' col  Bottom         = red   $ pretty "⊥"
+    pp' col  Top            = green $ pretty "⊤"
     pp' col  (Atomic x)     = let c = fromMaybe id (lookup x col) in c (pretty x)
-    pp' col  (Not f1)       = ppUnary col (pretty "!") f1 -- ¬
+    pp' col  (Not f1)       = ppUnary col (pretty "¬") f1
     pp' col  (Square f1)    = ppUnary col (pretty "□") f1
     pp' col  (Diamond f1)   = ppUnary col (pretty "◇") f1
     pp' col  (Or f1 f2)     = let pred f = isBinary f && not (isOr f)
-                              in ppBinary col pred (pretty " || ") f1 f2 -- ∨
+                              in ppBinary col pred (pretty " ∨ ") f1 f2
     pp' col  (And f1 f2)    = let pred f = isImply f || isIff f
-                              in ppBinary col pred (pretty " && ") f1 f2  -- ∧
+                              in ppBinary col pred (pretty " ∧ ") f1 f2
     pp' col  (Imply f1 f2)  = let p1 = parensIf (isImply f1 || isIff f1)
                                   p2 = parensIf (isIff f2)
-                              in  p1 (pp' col f1) <> pretty " -> " <> p2 (pp' col f2) -- →
-    pp' col  (Iff f1 f2)    = ppBinary col isIff (pretty " <-> ") f1 f2      -- ↔
+                              in  p1 (pp' col f1) <> pretty " -> " <> p2 (pp' col f2)
+    pp' col  (Iff f1 f2)    = ppBinary col isIff (pretty " <-> ") f1 f2
     ppUnary col sym f = let p = parensIf (isBinary f)
                         in sym <> p (pp' col f)
     ppBinary col pred sym f1 f2 = let p1 = parensIf (pred f1)
@@ -93,6 +93,7 @@ pp = pp'
 -- le pone parentesis cuando es un <->.
 -- El operador <-> nunca pone parentesis a sus argumentos ya que es el de menor
 -- precedencia.
+-- Referir a http://intrologic.stanford.edu/dictionary/operator_precedence.html
 
 {------------ Trace Pretty Printing ------------}
 ppEval :: Bool -> Eval -> Doc ()

@@ -27,7 +27,6 @@ data Axiom = Axiom { axiomName :: String
 data AxiomsTrace = AxiomsTrace
                     { getAxioms :: [(Axiom, Bool)]
                     , evalAxioms :: Bool
-                    -- , getLogic :: Logic
                     }
 
 
@@ -38,42 +37,41 @@ data Logic = Logic { logicName :: String
                    , logicAxioms :: [Axiom]
                    }
 
-axK, axT, axB, axD, ax4, ax5 :: Axiom
-axK = Axiom "K"
+axK, axT, axB, axD, ax4, ax5, axE, axC :: Axiom
+axK = Axiom "K"                          -- [](p -> q) -> ([]p -> []q)
             ( Imply ( Square (Imply p q) )
                     ( Imply (Square p) (Square q) )
             )
             (const True)
     where p = Atomic "p"
           q = Atomic "q"
-axT = Axiom "T"
+axT = Axiom "T"                          -- []p -> p
             ( Imply (Square p) p )
             F.isReflexive
     where p = Atomic "p"
-axB = Axiom "B"
+axB = Axiom "B"                          -- p -> []<>p
             ( Imply p (Square (Diamond p)) )
             F.isSymmetric
     where p = Atomic "p"
-axD = Axiom "D"
+axD = Axiom "D"                          -- []p -> <>p
             ( Imply (Square p) (Diamond p) )
             F.isSerial
     where p = Atomic "p"
-ax4 = Axiom "4"
+ax4 = Axiom "4"                          -- []p -> [][]p
             ( Imply (Square p) (Square (Square p)) )
             F.isTransitive
     where p = Atomic "p"
-ax5 = Axiom "5"
+ax5 = Axiom "5"                          -- <>p -> []<>p
             ( Imply (Diamond p) (Square (Diamond p)) )
             F.isEuclidean
     where p = Atomic "p"
-
--- Check if these are well known. I invented these names
-axE, axC :: Axiom
-axE = Axiom "E"
+-- El nombre de los siguientes dos axiomas los invente yo ya que no
+-- encontre ninguna referencia que indique que estos poseen un nombre conocido.
+axE = Axiom "E"                          -- []p <-> <>p
             ( Iff (Square p) (Diamond p) )
             F.isFunctional
     where p = Atomic "p"
-axC = Axiom "C"
+axC = Axiom "C"                          -- [](p && []p -> q) || [](q && []q -> p)
             ( Or ( Square (Imply (And p (Square p)) q) )
                  ( Square (Imply (And q (Square q)) p) ) )
             F.isLinear
@@ -85,11 +83,20 @@ modalAxioms = [ axK, axT, axB, axD, ax4, ax5, axE, axC ]
 
 -- Standard modal logics supported
 modalLogics :: [Logic]
-modalLogics = [ Logic "K"  "TODO"   [ axK ]
-              , Logic "T"  "cambiar esto" [ axK , axT ]
-              , Logic "S4" "agregar descripciones" [ axK , axT , ax4 ]
-              , Logic "S5" "                 " [ axK , axT , ax5 ]
-              , Logic "D"  ""                  [ axK , axD ]
+modalLogics = [ Logic "K"     "La lógica modal normal más debil."   [ axK ]
+              , Logic "T"     ( "Representa sistemas de razonamiento donde un agente solo\n" ++
+                                "puede conocer verdades." )
+                              [ axK , axT ]
+              , Logic "S4"    ( "Extiende la lógica T agregando la propiedad de introspección positiva, es decir,\n" ++
+                                "si el agente sabe algo, entonces sabe que lo sabe." )
+                              [ axK , axT , ax4 ]
+              , Logic "KT45"  ( "Extiende la lógica S4 agregando la propiedad de introspección negativa, es decir," ++
+                                "si el agente no sabe algo, entonces sabe que no lo sabe.")
+                              [ axK , axT , ax4, ax5 ]
+              , Logic "S5"    "Lógica usada comunmente, sin interpretación concreta"
+                              [ axK , axT , axB, ax4, ax5 ]
+              , Logic "D"     "Lógica usada comunmente, sin interpretación concreta"
+                              [ axK , axD ]
               ]
 
 identToLogic :: String -> Either String Logic

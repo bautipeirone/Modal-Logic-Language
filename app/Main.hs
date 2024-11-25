@@ -54,7 +54,7 @@ runOrFail m = do
 repl :: [String] -> InputT RT ()
 repl args = do
         lift $ setInter True
-        lift $ catchErrors $ compileFiles args
+        lift $ catchErrors $ compileFiles (prelude:args)
         inter <- lift getInter
         when inter $ liftIO $ putStrLn
           (  "Intérprete de " ++ iname ++ ".\n"
@@ -184,7 +184,7 @@ helpTxt cs =
            cs
          )
 
-modalLibrary :: String -- TODO escribir mensaje
+modalLibrary :: String
 modalLibrary = show ppModalHelp
 
 printModel :: RT ()
@@ -239,9 +239,9 @@ handleStmt stmt = do
   verbose <- getVerbose
   inter <- getInter
   res <- liftEval $ runCmd stmt
-  let output = maybe "" (show . ppEval verbose) res
-  liftIO $ when inter $ putStrLn output
-
+  let output = maybe "" (\ev -> show (ppEval verbose ev) ++ "\n") res
+  liftIO $ when inter $ putStr output
 
 prelude :: String
-prelude = "examples/Prelude.mll"
+prelude = "lib/Prelude.mll"
+
