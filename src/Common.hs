@@ -9,11 +9,6 @@ module Common
   , atoms
 ) where
 
-import Frame (Graph)
-
-import Control.Monad
-import Control.Monad.Trans.Reader
-import Control.Monad.Error.Class (throwError)
 
 import Data.List (singleton, nub)
 

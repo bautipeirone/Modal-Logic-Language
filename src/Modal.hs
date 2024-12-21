@@ -15,10 +15,7 @@ module Modal
 
 import Common
 import Prelude hiding (log)
-import Control.Monad (liftM, liftM2)
 import Control.Monad.Reader
-import Control.Monad.Writer
-import Data.Bifunctor
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -65,9 +62,6 @@ emptyModel = Model {frame = emptyFrame, tag = M.empty}
 worlds :: Model w a -> [w]
 worlds = vertices . frame
 
-transitions :: Model w a -> M.Map w [w]
-transitions = edges . frame
-
 buildFrame :: Ord w => [(w, [w])] -> Graph w
 buildFrame = graphFromEdges
 
@@ -80,13 +74,6 @@ validAtoms m w = fromMaybe S.empty (M.lookup w l)
 
 nextStates :: Model World a -> World -> [World]
 nextStates m = neighbours (frame m)
-
-evalInWorlds :: Formula Atom -> [World] -> EvalM [Trace]
-evalInWorlds f = mapM (||- f)
-
--- log :: Formula Atom -> Bool -> EvalM ()
--- log f b = do   <- get
-              -- tell $ indent n $ show f ++ ": " ++ show b ++ "\n"
 
 (||-) :: World -> Formula Atom -> EvalM Trace
 _ ||- f@Bottom         = return $ Trace f False (subforms [])
@@ -124,21 +111,6 @@ w ||- f@(Diamond f1)   = do model <- ask
                             let subTraces = worldSteps (zip (nextStates model w) ts)
                             return $ Trace f b subTraces
 
-{-
---propConstantEval :: Formula Atom -> Bool -> EvalM Trace
-propConstantEval f b = return $ Trace f b (subforms [])
-
---propUnaryEval :: World -> Formula Atom -> (Bool -> Bool) -> (Bool, Either [Trace] [(World, Trace)])
-propUnaryEval w f op = do t <- w ||- f
-                          let b = op (evalTrace t)
-                          return $ Trace _ b (subforms [t])
-
---propBinaryEval :: World -> Formula Atom -> Formula Atom -> (Bool -> Bool -> Bool) -> EvalM Trace
-propBinaryEval w f1 f2 op = do t1 <- w ||- f1
-                               f2 <- w ||- f2
-                               let b = evalTrace t1 `op` evalTrace t2
-                               return $ Trace f b 
--}
 satisfiableInModel :: Formula Atom -> EvalM ModelTrace
 satisfiableInModel f = do m <- ask
                           ts <- mapM (||- f) (worlds m)

@@ -16,8 +16,8 @@ elab :: Scheme Atom -> RT (Formula Atom)
 elab = elab' []
   where
     elab' :: DefTable Atom -> Scheme Atom -> RT (Formula Atom)
-    elab' env LBottom        = return Bottom
-    elab' env LTop           = return Top
+    elab' _   LBottom        = return Bottom
+    elab' _   LTop           = return Top
     elab' env (LAtomic x)    = return $ sub env (Atomic x)
     elab' env (LIdent v)     = do def <- snd <$> getEnv
                                   maybe (undefVarError v) (return . sub env) (lookup v def)
@@ -44,8 +44,8 @@ elab = elab' []
 
     sub :: DefTable Atom -> Formula Atom -> Formula Atom
     sub env p@(Atomic x)   = fromMaybe p (lookup x env)
-    sub env Top            = Top
-    sub env Bottom         = Bottom
+    sub _   Top            = Top
+    sub _   Bottom         = Bottom
     sub env (Not      f )  = Not (sub env f)
     sub env (Square   f )  = Square (sub env f)
     sub env (Diamond  f )  = Diamond (sub env f)

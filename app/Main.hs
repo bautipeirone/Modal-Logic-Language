@@ -9,22 +9,17 @@ import           Control.Exception              ( catch -- For IO exceptions
 import System.Exit ( exitWith, ExitCode(ExitFailure) )
 
 
-import           Data.List
+import           Data.List  ( isPrefixOf, intercalate, nub )
 import           Data.Char
-import           Common
 import           Core
 import           PrettyPrinter
 import           Parser
 import           Elab
 import           State
-import           Axioms
 
-import Control.Monad ( when, unless, foldM, (>=>) )
+import Control.Monad ( when, (>=>) )
 import Control.Monad.Trans
 import qualified Control.Monad.Error.Class    as C
-import qualified Control.Monad.Trans.State    as S
-import qualified Control.Monad.Trans.Reader   as R
-import qualified Control.Monad.Trans.Except   as E
 
 ---------------------
 --- Interpreter
@@ -54,7 +49,7 @@ runOrFail m = do
 repl :: [String] -> InputT RT ()
 repl args = do
         lift $ setInter True
-        lift $ catchErrors $ compileFiles (prelude:args)
+        _ <- lift $ catchErrors $ compileFiles (prelude:args)
         inter <- lift getInter
         when inter $ liftIO $ putStrLn
           (  "Intérprete de " ++ iname ++ ".\n"
@@ -230,9 +225,6 @@ parseIO :: String -> Parser a -> String -> RT a
 parseIO f p x = case p x 1 f of
   Left  e -> parseError e
   Right r -> return r
-
-handleStmts :: [Stmt] -> RT ()
-handleStmts = mapM_ handleStmt
 
 handleStmt :: Stmt -> RT ()
 handleStmt stmt = do

@@ -8,7 +8,7 @@ module PrettyPrinter
   ) where
 
 import Common
-import Core (Trace (..), ModelTrace (..), AxiomsTrace (..), Eval (..))
+import Core (Eval (..))
 import Axioms
 import Modal
 import Frame
@@ -24,10 +24,6 @@ type Color = Doc () -> Doc ()
 type Coloring a = [(a, Color)]
 
 {---------------- Utilidades -----------------}
--- Translation of formula to LaTeX
-toLatex :: Formula a -> String
-toLatex = undefined
-
 padWordLeft :: Int -> String -> String
 padWordLeft w s = let l = length s
                       pad = replicate (w - l) ' '
@@ -63,26 +59,26 @@ ppFormula f = let col = assignColors (atoms f) in pp col f
 pp :: Coloring Atom -> Formula Atom -> Doc ()
 pp = pp'
   where
-    pp' col  Bottom         = red   $ pretty "⊥"
-    pp' col  Top            = green $ pretty "⊤"
+    pp' _    Bottom         = red   $ pretty "⊥"
+    pp' _    Top            = green $ pretty "⊤"
     pp' col  (Atomic x)     = let c = fromMaybe id (lookup x col) in c (pretty x)
     pp' col  (Not f1)       = ppUnary col (pretty "¬") f1
     pp' col  (Square f1)    = ppUnary col (pretty "□") f1
     pp' col  (Diamond f1)   = ppUnary col (pretty "◇") f1
-    pp' col  (Or f1 f2)     = let pred f = isBinary f && not (isOr f)
-                              in ppBinary col pred (pretty " ∨ ") f1 f2
-    pp' col  (And f1 f2)    = let pred f = isImply f || isIff f
-                              in ppBinary col pred (pretty " ∧ ") f1 f2
+    pp' col  (Or f1 f2)     = let predicate f = isBinary f && not (isOr f)
+                              in ppBinary col predicate (pretty " ∨ ") f1 f2
+    pp' col  (And f1 f2)    = let predicate f = isImply f || isIff f
+                              in ppBinary col predicate (pretty " ∧ ") f1 f2
     pp' col  (Imply f1 f2)  = let p1 = parensIf (isImply f1 || isIff f1)
                                   p2 = parensIf (isIff f2)
                               in  p1 (pp' col f1) <> pretty " -> " <> p2 (pp' col f2)
     pp' col  (Iff f1 f2)    = ppBinary col isIff (pretty " <-> ") f1 f2
     ppUnary col sym f = let p = parensIf (isBinary f)
                         in sym <> p (pp' col f)
-    ppBinary col pred sym f1 f2 = let p1 = parensIf (pred f1)
-                                      p2 = parensIf (pred f2)
-                                  in p1 (pp' col f1) <> sym <> p2 (pp' col f2)
--- * operador unario, + operador binario
+    ppBinary col predicate sym f1 f2 =  let p1 = parensIf (predicate f1)
+                                            p2 = parensIf (predicate f2)
+                                        in p1 (pp' col f1) <> sym <> p2 (pp' col f2)
+-- Sea * un operador unario, y + un operador binario
 -- (* (+ x y)) se escribe como * (x + y)
 -- Un operador or pone parentesis si su argumento es un operador binario excepto para el or.
 -- Indistinto para argumento izquierdo o derecho
@@ -108,7 +104,7 @@ ppEval True eval = case eval of
 
 
 ppTrace :: Trace -> Doc ()
-ppTrace t = let col = assignColors (atoms (getTraceHead t)) in ppTrace' col t
+ppTrace tr = let col = assignColors (atoms (getTraceHead tr)) in ppTrace' col tr
   where
     ppTrace' :: Coloring Atom -> Trace -> Doc ()
     ppTrace' col t = let backtrace = case getSubtrace t of
@@ -152,9 +148,9 @@ ppModelTrace mt = let backtrace = concatWorldSteps ppTrace (getWorldTraces mt)
                   in backtrace <> result
 
 ppAxiomsTrace :: AxiomsTrace -> Doc ()
-ppAxiomsTrace at = vsep $ map (ppAxiomsCheck width) (getAxioms at)
+ppAxiomsTrace at = vsep $ map (ppAxiomsCheck colWidth) (getAxioms at)
         where
-          width = maximum $ map (length . axiomName . fst) (getAxioms at)
+          colWidth = maximum $ map (length . axiomName . fst) (getAxioms at)
           ppCheck :: Bool -> Doc ()
           ppCheck  True = green $ pretty "✓"
           ppCheck False = red   $ pretty "✗"
@@ -202,30 +198,6 @@ parensIf :: Bool -> Doc () -> Doc ()
 parensIf True  = parens
 parensIf False = id
 
--- isTop :: Formula a -> Bool
--- isTop Top = True
--- isTop _   = False
-
--- isBottom :: Formula a -> Bool
--- isBottom Bottom = True
--- isBottom _      = False
-
--- isAtomic :: Formula a -> Bool
--- isAtomic Atomic{} = True
--- isAtomic _        = False
-
--- isNot :: Formula a -> Bool
--- isNot Not{} = True
--- isNot _     = False
-
--- isSquare :: Formula a -> Bool
--- isSquare Square{} = True
--- isSquare _        = False
-
--- isDiamond :: Formula a -> Bool
--- isDiamond Diamond{} = True
--- isDiamond _         = False
-
 isAnd :: Formula a -> Bool
 isAnd And{} = True
 isAnd _     = False
@@ -241,12 +213,6 @@ isImply _       = False
 isIff :: Formula a -> Bool
 isIff Iff{} = True
 isIff _     = False
-
--- isConstant :: Formula a -> Bool
--- isConstant f = any ($ f) [isTop, isBottom, isAtomic]
-
--- isUnary :: Formula a -> Bool
--- isUnary f = any ($ f) [isNot, isSquare, isDiamond]
 
 isBinary :: Formula a -> Bool
 isBinary f = any ($ f) [isAnd, isOr, isImply, isIff]

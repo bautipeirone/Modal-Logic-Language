@@ -24,7 +24,6 @@ module State
   , setModel
   , setDefs
   , liftEval
-  , runRT
 ) where
 
 import Control.Monad.Trans
@@ -53,7 +52,7 @@ instance Show Error where
 class (MonadState State m, MonadError Error  m, MonadIO m) => MonadRuntime m where
 
 type RT     = StateT State (ExceptT Error IO)       -- Runtime del interprete
-type EvalRT = StateT  Env   (Except Error)           -- Runtime del evaluador
+type EvalRT = StateT Env   (Except Error)           -- Runtime del evaluador
 
 instance MonadRuntime RT
 
@@ -108,9 +107,9 @@ liftEval eval = do  state <- get
                     let res = runExcept $ runStateT eval (env state)
                     case res of
                       Left e -> throwError e
-                      Right (eval, env') -> do
+                      Right (eval', env') -> do
                           setEnv env'
-                          return eval
+                          return eval'
 
 -- liftElab :: ElabRT a -> RT a
 -- liftElab elab = undefined

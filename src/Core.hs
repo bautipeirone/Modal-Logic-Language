@@ -1,17 +1,15 @@
 {-# LANGUAGE DeriveFunctor #-}
 
 module Core
-  ( Stmt (..)
+  ( Stmt
   , SetStmt (..)
-  , Op (..)
+  , Op
   , Eval (..)
   , runCmd
   , GStmt (..)
   , GOp (..)
   , SStmt
-  , Stmt
   , SOp
-  , Op
   , module Modal
   , module Axioms
   ) where
