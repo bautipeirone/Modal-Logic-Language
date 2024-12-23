@@ -129,7 +129,8 @@ ppModalHelp = vsep [ pretty "Los axiomas son: "
     ppLogicMsg lg = pretty (padWordLeft 4 (logicName lg))
                  <> pretty "  =  "
                  <> pretty (map axiomName (logicAxioms lg))
-                 <> line
+                --  <> line
+                 <> pretty "  |  "
                  <> pretty (logicDescription lg)
 
 ppFrame :: Model World Atom -> Doc ()
