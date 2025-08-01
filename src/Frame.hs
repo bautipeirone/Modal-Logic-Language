@@ -78,7 +78,7 @@ isTransitive :: Ord v => GraphProperty v
 isTransitive g = all vertexIsTransitive (vertices g)
       where
         vertexIsTransitive x = all (f x) (neighbours g x)
-        f x y = all (\z -> existsEdge g (x,z)) (neighbours g y)
+        f x y = any (\z -> existsEdge g (x,z)) (neighbours g y)
 
 isEuclidean :: Ord v => GraphProperty v
 isEuclidean g = all vertexIsEuclidean (vertices g)

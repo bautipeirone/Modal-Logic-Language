@@ -9,7 +9,7 @@ import           Control.Exception              ( catch -- For IO exceptions
 import System.Exit ( exitWith, ExitCode(ExitFailure) )
 
 
-import           Data.List  ( isPrefixOf, intercalate, nub )
+import           Data.List  ( isPrefixOf, intercalate )
 import           Data.Char
 import           Core
 import           PrettyPrinter
@@ -113,10 +113,7 @@ handleCommand cmd = do
     Quit   -> return False
     Noop   -> return True
     Help   -> liftIO $ putStr (helpTxt commands) >> return True
-    Browse -> do
-      env <- getEnv
-      liftIO $ putStr (unlines $ reverse (nub (map fst (snd env))))
-      return True
+    Browse -> printDefs >> return True
     Compile c -> do
       case c of
         CompileInteractive s -> compilePhrase s
@@ -186,6 +183,17 @@ printModel :: RT ()
 printModel = do model <- fst <$> getEnv
                 let out = show $ ppFrame model
                 liftIO $ putStrLn out
+
+printDefs :: RT ()
+printDefs = do
+    env <- getEnv
+    case snd env of
+      [] -> liftIO $ putStrLn "No hay definiciones cargadas por ahora"
+      xs -> let nameWidth = maximum (map (length . fst) xs)
+            in liftIO $ putStr (unlines $ map (showDef nameWidth) xs)
+  where
+    showDef nw (n,f) =  let padding = replicate (nw + 1 - (length n)) ' '
+                        in n ++ padding ++ ": " ++ (show $ ppFormula f)
 
 compileFiles :: [String] -> RT ()
 compileFiles = mapM_ compileFile
