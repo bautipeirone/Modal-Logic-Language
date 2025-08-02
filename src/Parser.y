@@ -84,9 +84,12 @@ import Axioms
 {- Esta es la forma recomendada por Happy para parsear secuencias.
 -- Si bien el resultado esta del reverso (algo que no importa aca)
 -- el parser gana en eficiencia y uso de stack. -}
-collection(p, sep)  : collection(p, sep) sep p     { $3 : $1 }
-                    | p                            { [$1] }
-                    |                              { [] }
+collectionStrict(p, sep)  : collectionStrict(p, sep) sep p     { $3 : $1 }
+                          | p                            { [$1] }
+                          |                              { [] }
+
+collection(p,sep) : collectionStrict(p,sep)     { $1 }
+                  | collectionStrict(p,sep) sep { $1 }
 
 -- Set :: { [String] }  -- Conjunto matematico por extension, no el token set
 Set(p) : '{' collection(p, ',') '}' { $2 }
