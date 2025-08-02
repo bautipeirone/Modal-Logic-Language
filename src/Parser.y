@@ -91,11 +91,15 @@ collection(p, sep)  : collection(p, sep) sep p     { $3 : $1 }
 -- Set :: { [String] }  -- Conjunto matematico por extension, no el token set
 Set(p) : '{' collection(p, ',') '}' { $2 }
 
-ElementMapping  :: { (String, [String]) }
-ElementMapping  : keyword '->' Set(keyword)   { ($1, $3) }
+-- ElementMapping  :: { (String, [String]) }
+ElementMapping(dom,codom)  : dom '->' Set(codom)   { ($1, $3) }
 
-Map :: { [(String, [String])] }
-Map : '{' collection(ElementMapping, ',') '}' { $2 }
+-- Map :: { [(String, [String])] }
+Map(dom,codom) : '{' collection(ElementMapping(dom,codom), ',') '}' { $2 }
+
+world :: { String }
+world : ident   { $1 }
+      | keyword { $1 }
 
 -- ######## GRAMMAR PARSERS ########
 File    :: { [SStmt] }
@@ -108,14 +112,14 @@ Stmt  : def ident '=' FExp { Def $2 $4 }
       | SetStmt            { Set $1 }
 
 SetStmt :: { SetStmt }
-SetStmt : set frame  '=' Map { Frame (buildFrame $4) }
-        | set tag    '=' Map { Tag   (buildTag   $4) }
+SetStmt : set frame  '=' Map(world, world) { Frame (buildFrame $4) }
+        | set tag    '=' Map(world, keyword) { Tag   (buildTag   $4) }
 
 Exp :: { SOp }
 Exp : isValid FExp       { Valid $2 }
     | isSatis FExp       { Satis $2 }
     | assume Logic       { Assume $2 }
-    | keyword '||-' FExp { Sequent $1 $3 }
+    | world '||-' FExp { Sequent $1 $3 }
 
 FExp  :: { Scheme Atom }
 FExp  : FExp and FExp   { LAnd $1 $3 }
